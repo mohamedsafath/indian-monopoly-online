@@ -15,6 +15,7 @@ const ARRIVE_MS     = 500;  // bounce animation duration (landing pause)
 export function useTokenMovement(players) {
   const [displayPositions, setDisplayPositions] = useState({});
   const [arrivingPlayers,  setArrivingPlayers]  = useState(new Set());
+  const [teleportingPlayers, setTeleportingPlayers] = useState(new Set());
   
   // Track players currently running an animation to avoid overwriting their positions
   const animatingPlayersRef = useRef(new Set());
@@ -49,6 +50,13 @@ export function useTokenMovement(players) {
         };
 
         if (teleport) {
+          // Add player to teleportingPlayers set to instantly snap in TokenLayer
+          setTeleportingPlayers((s) => {
+            const ns = new Set(s);
+            ns.add(playerId);
+            return ns;
+          });
+
           // Snap immediately without walking tile-by-tile
           setDisplayPositions((d) => ({ ...d, [playerId]: to }));
 
@@ -62,6 +70,12 @@ export function useTokenMovement(players) {
           await delay(ARRIVE_MS);
 
           setArrivingPlayers((s) => {
+            const ns = new Set(s);
+            ns.delete(playerId);
+            return ns;
+          });
+
+          setTeleportingPlayers((s) => {
             const ns = new Set(s);
             ns.delete(playerId);
             return ns;
@@ -104,5 +118,5 @@ export function useTokenMovement(players) {
     });
   }, []);
 
-  return { displayPositions, arrivingPlayers, animateMovement };
+  return { displayPositions, arrivingPlayers, teleportingPlayers, animateMovement };
 }

@@ -19,6 +19,7 @@ export const TokenLayer = React.memo(function TokenLayer({
   players,
   displayPositions,
   arrivingPlayers,
+  teleportingPlayers = new Set(),
   currentPlayerId,
   myId,
 }) {
@@ -53,6 +54,18 @@ export const TokenLayer = React.memo(function TokenLayer({
         const leftPct = getCellPercent(tilePos.col);
         const topPct  = getCellPercent(tilePos.row);
 
+        // Determine if player is currently moving (walking step-by-step)
+        const isMoving = displayPositions[player.id] !== undefined && displayPositions[player.id] !== player.position;
+        // Determine if player is teleporting
+        const isTeleporting = teleportingPlayers?.has(player.id);
+
+        let transitionStyle = 'left 0.25s cubic-bezier(0.25, 1, 0.5, 1), top 0.25s cubic-bezier(0.25, 1, 0.5, 1)';
+        if (isTeleporting) {
+          transitionStyle = 'none';
+        } else if (isMoving) {
+          transitionStyle = 'left 0.25s linear, top 0.25s linear';
+        }
+
         return (
           <div
             key={player.id}
@@ -62,8 +75,8 @@ export const TokenLayer = React.memo(function TokenLayer({
               top:       `${topPct}%`,
               transform: 'translate(-50%, -50%)',
               zIndex:    player.id === currentPlayerId ? 30 : 20,
-              // Smooth repositioning between tiles
-              transition: 'left 0.11s ease-out, top 0.11s ease-out',
+              // Smooth repositioning between tiles (no corner stutter, instant jail snaps)
+              transition: transitionStyle,
               pointerEvents: 'none',
             }}
           >

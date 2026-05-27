@@ -210,7 +210,7 @@ export default function Home() {
       <CityStrip />
 
       {/* Hero section */}
-      <main className="flex-1 flex flex-col items-center justify-center px-4 py-16 relative">
+      <main className="flex-1 flex flex-col items-center justify-start px-4 py-8 md:py-16 relative">
 
         {/* Brand */}
         <div className="text-center mb-3">

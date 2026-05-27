@@ -16,7 +16,7 @@ export const PlayerToken = React.memo(function PlayerToken({
     <div
       title={`${player.username}${player.isBankrupt ? ' (bankrupt)' : ''}`}
       style={{
-        position:        'absolute',
+        position:        'relative',
         width:           22,
         height:          22,
         borderRadius:    '50%',

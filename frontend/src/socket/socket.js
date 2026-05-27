@@ -16,7 +16,7 @@
 
 import { io } from 'socket.io-client';
 
-const BACKEND_URL = 'http://localhost:5001';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5001';
 
 const socket = io(BACKEND_URL, {
   // Do not connect immediately — we connect explicitly on room create/join

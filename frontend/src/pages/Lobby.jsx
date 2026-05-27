@@ -327,7 +327,7 @@ export default function Lobby() {
       </header>
 
       {/* ── Body ──────────────────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col lg:flex-row gap-4 p-4 overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row gap-4 p-4 overflow-y-auto lg:overflow-hidden">
 
         {/* ── Left column ──────────────────────────────────────────────────── */}
         <div className="flex flex-col gap-4 lg:w-80 flex-shrink-0">

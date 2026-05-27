@@ -14,27 +14,27 @@ import { OwnershipBadge } from './OwnershipBadge';
 
 // ── Short name map (keeps tiles uncluttered and prevents wraps) ───────────────
 const SHORT_NAMES = {
-  'Indian Railways North 🚂': 'Railways North',
-  'Indian Railways South 🚂': 'Railways South',
-  'Indian Railways East 🚂':  'Railways East',
-  'Indian Railways West 🚂':  'Railways West',
-  'Electricity Board ⚡':     'Electricity',
-  'Water Board 💧':           'Water Board',
+  'Indian Railways North 🚂': 'Rly North 🚂',
+  'Indian Railways South 🚂': 'Rly South 🚂',
+  'Indian Railways East 🚂':  'Rly East 🚂',
+  'Indian Railways West 🚂':  'Rly West 🚂',
+  'Electricity Board ⚡':     'Electricity ⚡',
+  'Water Board 💧':           'Water Board 💧',
   'Community Chest':           'Comm. Chest',
   'Income Tax':                'Income Tax',
-  'Andaman & Nicobar 🏝️':      'Andaman',
-  'Bengaluru Tech Park 💻':    'Bengaluru Tech',
-  'Mumbai Marine Drive 🌊':    'Marine Drive',
-  'Income Tax Raid 🚔':        'Tax Raid',
-  'GST Payment 💸':            'GST Payment',
+  'Andaman & Nicobar 🏝️':      'Andaman 🏝️',
+  'Bengaluru Tech Park 💻':    'Bengaluru Tech 💻',
+  'Mumbai Marine Drive 🌊':    'Marine Drive 🌊',
+  'Income Tax Raid 🚔':        'Tax Raid 🚔',
+  'GST Payment 💸':            'GST Payment 💸',
 };
 
 const TWO_LINE_NAMES = {
   'Start Journey 🇮🇳':           ['Start', 'Journey 🇮🇳'],
-  'Indian Railways North 🚂':   ['Railways', 'North 🚂'],
-  'Indian Railways South 🚂':   ['Railways', 'South 🚂'],
-  'Indian Railways East 🚂':    ['Railways', 'East 🚂'],
-  'Indian Railways West 🚂':    ['Railways', 'West 🚂'],
+  'Indian Railways North 🚂':   ['Rly', 'North 🚂'],
+  'Indian Railways South 🚂':   ['Rly', 'South 🚂'],
+  'Indian Railways East 🚂':    ['Rly', 'East 🚂'],
+  'Indian Railways West 🚂':    ['Rly', 'West 🚂'],
   'Electricity Board ⚡':        ['Electricity', 'Board ⚡'],
   'Water Board 💧':              ['Water', 'Board 💧'],
   'Community Chest':            ['Community', 'Chest'],
@@ -160,8 +160,8 @@ export const BoardTile = React.memo(function BoardTile({
   }, [isVerticalEdge, tile]);
 
   const nameSize = isVerticalEdge
-    ? '12px'
-    : (displayLines.length > 1 ? '11px' : '13px');
+    ? '9.5px'
+    : (displayLines.length > 1 ? '9px' : '10.5px');
 
   // Glow color for hover / active state
   const glowColor = ownerColor ?? groupColor ?? iconGlow ?? 'rgba(212,175,55,0.5)';
@@ -227,12 +227,12 @@ export const BoardTile = React.memo(function BoardTile({
         width:          '100%',
         height:         '100%',
         zIndex:         3,
-        paddingLeft:    edge === 'left' ? (hasStrip ? '28%' : '12%') : '12%',
-        paddingRight:   edge === 'right' ? (hasStrip ? '28%' : '12%') : '12%',
+        paddingLeft:    edge === 'left' ? (hasStrip ? '26%' : '8%') : '8%',
+        paddingRight:   edge === 'right' ? (hasStrip ? '26%' : '8%') : '8%',
         paddingTop:     '4px',
         paddingBottom:  '4px',
         boxSizing:      'border-box',
-        gap:            8,
+        gap:            4,
       };
     } else {
       return {
@@ -255,8 +255,9 @@ export const BoardTile = React.memo(function BoardTile({
 
   const orderIcon  = isVerticalEdge && edge === 'right' ? 3 : 1;
   const orderPrice = isVerticalEdge && edge === 'right' ? 1 : 3;
-  const textAlignment = isVerticalEdge ? (edge === 'left' ? 'left' : 'right') : 'center';
-  const flexAlignment = isVerticalEdge ? (edge === 'left' ? 'flex-start' : 'flex-end') : 'center';
+  const textAlignment = 'center';
+  const flexAlignment = 'center';
+
 
   return (
     <div

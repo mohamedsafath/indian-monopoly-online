@@ -414,6 +414,7 @@ export const MonopolyBoard = React.memo(function MonopolyBoard({
   // From useTokenMovement:
   displayPositions,
   arrivingPlayers,
+  teleportingPlayers,
   // Extra actions:
   onBuildHouse,
   onBuildHotel,
@@ -581,6 +582,7 @@ export const MonopolyBoard = React.memo(function MonopolyBoard({
                   players={players}
                   displayPositions={displayPositions}
                   arrivingPlayers={arrivingPlayers ?? new Set()}
+                  teleportingPlayers={teleportingPlayers}
                   currentPlayerId={currentPlayerId}
                   myId={myId}
                 />

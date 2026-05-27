@@ -11,48 +11,47 @@ const result = engine.initializeGame("room1", players);
 const gameState = result.gameState;
 
 console.log("=== GAME START ===");
-console.log("Current player:", engine.currentPlayer(gameState).username);
+let activePlayer = engine.currentPlayer(gameState);
+console.log("Current player:", activePlayer.username);
 
 // ---------------- TEST 1 ----------------
 console.log("\n=== TEST 1: Dice Roll ===");
 
-const roll = engine.rollDice(gameState, "p1");
+const roll = engine.rollDice(gameState, activePlayer.id);
 
 console.log("Roll result:", roll.ok);
-console.log("Player position:", gameState.players["p1"].position);
-console.log("Player money:", gameState.players["p1"].money);
+console.log("Player position:", gameState.players[activePlayer.id].position);
+console.log("Player money:", gameState.players[activePlayer.id].money);
 
 // ---------------- TEST 2 ----------------
 console.log("\n=== TEST 2: Buy Property ===");
 
-const buy = engine.buyProperty(gameState, "p1");
+// We can buy if the position landed on is purchasable
+const buy = engine.buyProperty(gameState, activePlayer.id);
 
 if (buy.ok) {
   console.log("Property bought successfully");
 } else {
-  console.log("Buy failed:", buy.error);
+  console.log("Buy failed (expected if landed on non-purchasable tile):", buy.error);
 }
 
-console.log("Money after purchase:", gameState.players["p1"].money);
+console.log("Money after purchase attempt:", gameState.players[activePlayer.id].money);
 
 // ---------------- TEST 3 ----------------
 console.log("\n=== TEST 3: End Turn ===");
 
-const endTurn = engine.endTurn(gameState, "p1");
+const endTurn = engine.endTurn(gameState, activePlayer.id);
 
 console.log("End turn:", endTurn.ok);
-console.log("Current player now:",
-  engine.currentPlayer(gameState).username
-);
+activePlayer = engine.currentPlayer(gameState);
+console.log("Current player now:", activePlayer.username);
 
 // ---------------- TEST 4 ----------------
-console.log("\n=== TEST 4: Player 2 Dice Roll ===");
+console.log("\n=== TEST 4: Next Player Dice Roll ===");
 
-const roll2 = engine.rollDice(gameState, "p2");
+const roll2 = engine.rollDice(gameState, activePlayer.id);
 
-console.log("Player 2 roll:", roll2.ok);
-console.log("Player 2 position:",
-  gameState.players["p2"].position
-);
+console.log("Next Player roll:", roll2.ok);
+console.log("Next Player position:", gameState.players[activePlayer.id].position);
 
 console.log("\n=== TEST COMPLETE ===");

@@ -292,7 +292,7 @@ export default function GameRoom() {
   // ── Animation hooks ────────────────────────────────────────────────────────
   const { dicePhase, displayDice, triggerRoll, resetDice } = useDiceAnimation();
 
-  const { displayPositions, arrivingPlayers, animateMovement } = useTokenMovement(gameState?.players ?? null);
+  const { displayPositions, arrivingPlayers, teleportingPlayers, animateMovement } = useTokenMovement(gameState?.players ?? null);
 
   const boardAnimation = useBoardAnimation();
 
@@ -955,6 +955,7 @@ export default function GameRoom() {
             flashTile={boardAnimation.flashTile}
             displayPositions={displayPositions}
             arrivingPlayers={arrivingPlayers}
+            teleportingPlayers={teleportingPlayers}
           />
 
 
