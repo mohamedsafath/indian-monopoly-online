@@ -34,7 +34,7 @@ const JAIL_POS       = 10;
  * @param {number}  to   — destination tile from server (0-39)
  * @returns {number[]}   — array of tile indices to step through
  */
-export function buildMovePath(from, to) {
+export function buildMovePath(from, to, moveBack = 0) {
   from = ((from % BOARD_SIZE) + BOARD_SIZE) % BOARD_SIZE;
   to   = ((to   % BOARD_SIZE) + BOARD_SIZE) % BOARD_SIZE;
 
@@ -43,12 +43,15 @@ export function buildMovePath(from, to) {
 
   // GO_TO_JAIL teleport — snap directly, no walk-around animation
   if (from === GO_TO_JAIL_POS && to === JAIL_POS) return [JAIL_POS];
-  // Also handle any backwards teleport (e.g. "go back 3 spaces" chance cards)
-  // that would result in more steps going forward than backward.
-  // For Monopoly the token always moves FORWARD (clockwise), so we always
-  // step forward regardless. But if the server sends a position that is
-  // behind the current tile (ignoring chance-card cases), treat it as
-  // a wrap-around.
+
+  // If moveBack is specified and positive, walk BACKWARDS (counter-clockwise)
+  if (moveBack > 0) {
+    const path = [];
+    for (let i = 1; i <= moveBack; i++) {
+      path.push((from - i + BOARD_SIZE) % BOARD_SIZE);
+    }
+    return path;
+  }
 
   const steps = (to - from + BOARD_SIZE) % BOARD_SIZE;
 

@@ -89,7 +89,7 @@ export const GROUP_LABELS = {
 };
 
 /** Player token emojis & colors (must match gameEngine.js) */
-export const PLAYER_TOKENS  = ['🚗', '🐘', '🚆', '👑', '🛺', '🐅', '⚓', '🎯'];
+export const PLAYER_TOKENS  = ['🚗', '🐘', '🚆', '👑', '🛺', '🐅', '⚓', '🎯', '🦚', '🏏', '☕', '🪔', '🦁', '🚁', '🚢', '💼', '💰', '🎩'];
 export const PLAYER_COLORS  = [
   '#e74c3c', '#3498db', '#2ecc71', '#f39c12',
   '#9b59b6', '#1abc9c', '#e67e22', '#34495e',

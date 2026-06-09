@@ -62,14 +62,17 @@ const emit = (event, payload = {}) =>
  * Create a new room. Returns { room, playerId }.
  * @param {string} username
  */
-const createRoom = (username) => emit('create-room', { username });
+const createRoom = (username, playerId) => emit('create-room', { username, playerId });
 
 /**
  * Join an existing room by code. Returns { room, playerId }.
  * @param {string} code
  * @param {string} username
+ * @param {string} playerId
+ * @param {boolean} asSpectator
  */
-const joinRoom = (code, username) => emit('join-room', { code, username });
+const joinRoom = (code, username, playerId, asSpectator = false) =>
+  emit('join-room', { code, username, playerId, asSpectator });
 
 /**
  * Voluntarily leave the current room.
@@ -95,6 +98,12 @@ const reconnectRoom = (code, playerId) =>
 const setPlayerReady = (ready = true) => emit('player-ready', { ready });
 
 /**
+ * Select a character token (emoji) in the lobby.
+ * @param {string} token
+ */
+const selectToken = (token) => emit('select-token', { token });
+
+/**
  * Start the game (host only).
  */
 const startGame = () => emit('start-game');
@@ -104,6 +113,15 @@ const startGame = () => emit('start-game');
  * Returns { room, gameState? }.
  */
 const getRoomState = () => emit('get-room-state');
+
+/** Add a new bot (host only) */
+const addBot = () => emit('add-bot');
+
+/** Remove a bot (host only) */
+const removeBot = (playerId) => emit('remove-bot', { playerId });
+
+/** Kick a player (host only) */
+const kickPlayer = (playerId) => emit('kick-player', { playerId });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CHAT
@@ -140,6 +158,8 @@ const repayLoan           = ()           => emit('repay-loan');
 const declareBankruptcy   = ()           => emit('declare-bankruptcy');
 const requestEndGame      = ()           => emit('request-end-game');
 const voteEndGame         = (accept)     => emit('vote-end-game', { accept });
+const requestKickHost     = ()           => emit('request-kick-host');
+const voteKickHost        = (accept)     => emit('vote-kick-host', { accept });
 
 // Trade
 const initiateTrade = (targetId, offer, request) =>
@@ -170,8 +190,12 @@ const socketService = {
 
   // Lobby
   setPlayerReady,
+  selectToken,
   startGame,
   getRoomState,
+  addBot,
+  removeBot,
+  kickPlayer,
 
   // Chat
   sendMessage,
@@ -194,6 +218,8 @@ const socketService = {
   declareBankruptcy,
   requestEndGame,
   voteEndGame,
+  requestKickHost,
+  voteKickHost,
   initiateTrade,
   acceptTrade,
   rejectTrade,

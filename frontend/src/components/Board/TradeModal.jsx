@@ -67,9 +67,12 @@ export function TradeModal({
   gameState, myId, players, properties,
   onInitiateTrade, onAcceptTrade, onRejectTrade, onCancelTrade,
   onClose,
+  activeTrade: activeTradeProp,
 }) {
-  const activeTrade = gameState?.activeTrade ?? null;
+  const activeTrade = activeTradeProp || gameState?.activeTrade || null;
   const me          = players[myId];
+  const isSpectator = sessionStorage.getItem('mi_isSpectator') === 'true' || 
+    (gameState?.spectators || []).some(s => s.id === myId);
 
   // ── My properties ─────────────────────────────────────────────────────────
   const myProperties = useMemo(() =>
@@ -84,9 +87,9 @@ export function TradeModal({
   // ── Form state ────────────────────────────────────────────────────────────
   const [targetId,      setTargetId]      = useState(otherPlayers[0]?.id ?? '');
   const [offerProps,    setOfferProps]     = useState(new Set());
-  const [offerCash,     setOfferCash]      = useState(0);
+  const [offerCash,     setOfferCash]      = useState('');
   const [requestProps,  setRequestProps]   = useState(new Set());
-  const [requestCash,   setRequestCash]    = useState(0);
+  const [requestCash,   setRequestCash]    = useState('');
   const [submitting,    setSubmitting]     = useState(false);
   const [error,         setError]          = useState('');
 
@@ -103,7 +106,9 @@ export function TradeModal({
 
   const handlePropose = async () => {
     if (!targetId) { setError('Select a player'); return; }
-    if (offerProps.size === 0 && offerCash === 0 && requestProps.size === 0 && requestCash === 0) {
+    const finalOfferCash = Number(offerCash || 0);
+    const finalRequestCash = Number(requestCash || 0);
+    if (offerProps.size === 0 && finalOfferCash === 0 && requestProps.size === 0 && finalRequestCash === 0) {
       setError('Trade must include at least one item');
       return;
     }
@@ -112,10 +117,10 @@ export function TradeModal({
     try {
       await onInitiateTrade(targetId, {
         propertyIds: [...offerProps],
-        money:       offerCash,
+        money:       finalOfferCash,
       }, {
         propertyIds: [...requestProps],
-        money:       requestCash,
+        money:       finalRequestCash,
       });
       onClose();
     } catch (e) {
@@ -265,7 +270,17 @@ export function TradeModal({
                     <input
                       type="number" min="0" max={me?.money ?? 0}
                       value={offerCash}
-                      onChange={e => setOfferCash(Math.max(0, Math.min(me?.money ?? 0, Number(e.target.value))))}
+                      onChange={e => {
+                        const valStr = e.target.value;
+                        if (valStr === '') {
+                          setOfferCash('');
+                        } else {
+                          const num = Number(valStr);
+                          if (!isNaN(num)) {
+                            setOfferCash(Math.max(0, Math.min(me?.money ?? 0, Math.floor(num))));
+                          }
+                        }
+                      }}
                       style={{
                         flex: 1, padding: '4px 6px', borderRadius: 6,
                         background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
@@ -307,9 +322,20 @@ export function TradeModal({
                     <span style={{ fontSize: 11, color: '#d4af37' }}>₹</span>
                     <input
                       type="number" min="0"
-                      max={targetPlayer?.money ?? 0}
+                      max={isSpectator ? (targetPlayer?.money ?? 0) : undefined}
                       value={requestCash}
-                      onChange={e => setRequestCash(Math.max(0, Math.min(targetPlayer?.money ?? 0, Number(e.target.value))))}
+                      onChange={e => {
+                        const valStr = e.target.value;
+                        if (valStr === '') {
+                          setRequestCash('');
+                        } else {
+                          const num = Number(valStr);
+                          if (!isNaN(num)) {
+                            const val = Math.floor(num);
+                            setRequestCash(Math.max(0, isSpectator ? Math.min(targetPlayer?.money ?? 0, val) : val));
+                          }
+                        }
+                      }}
                       style={{
                         flex: 1, padding: '4px 6px', borderRadius: 6,
                         background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
@@ -318,9 +344,11 @@ export function TradeModal({
                       }}
                     />
                   </div>
-                  <div style={{ fontSize: 9, color: 'rgba(156,163,175,0.35)', marginTop: 2 }}>
-                    Their balance: ₹{fmt(targetPlayer?.money)}
-                  </div>
+                  {isSpectator && (
+                    <div style={{ fontSize: 9, color: 'rgba(156,163,175,0.35)', marginTop: 2 }}>
+                      Their balance: ₹{fmt(targetPlayer?.money)}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

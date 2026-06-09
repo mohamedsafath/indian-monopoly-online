@@ -63,6 +63,8 @@
 
 'use strict';
 
+const crypto = require('crypto');
+
 // ─────────────────────────────────────────────────────────────────────────────
 // EFFECT TYPE CONSTANTS  — imported by gameEngine.js for exhaustive matching
 // ─────────────────────────────────────────────────────────────────────────────
@@ -873,7 +875,7 @@ const COMMUNITY_CHEST_CARDS = Object.freeze([
 const shuffleDeck = (deck) => {
   const arr = Array.from(deck);
   for (let i = arr.length - 1; i > 0; i--) {
-    const j   = Math.floor(Math.random() * (i + 1));
+    const j   = crypto.randomInt(0, i + 1);
     const tmp = arr[i];
     arr[i]    = arr[j];
     arr[j]    = tmp;

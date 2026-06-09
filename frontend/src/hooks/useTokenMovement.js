@@ -39,7 +39,7 @@ export function useTokenMovement(players) {
    * Animate a player's token step-by-step from one position to another.
    * Resolves a Promise once the movement and arrival bounce are fully complete.
    */
-  const animateMovement = useCallback((playerId, from, to, teleport = false) => {
+  const animateMovement = useCallback((playerId, from, to, teleport = false, moveBack = 0) => {
     return new Promise((resolve) => {
       const run = async () => {
         animatingPlayersRef.current.add(playerId);
@@ -85,7 +85,7 @@ export function useTokenMovement(players) {
           return;
         }
 
-        const path = buildMovePath(from, to);
+        const path = buildMovePath(from, to, moveBack);
 
         // Walk step-by-step
         for (const step of path) {

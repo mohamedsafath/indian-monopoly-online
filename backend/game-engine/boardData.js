@@ -859,10 +859,10 @@ const hasMonopoly = (properties, playerId, tileId) => {
 };
 
 const countRailwaysOwned = (properties, playerId) =>
-  RAILWAY_TILE_IDS.filter((id) => properties[id]?.ownerId === playerId).length;
+  RAILWAY_TILE_IDS.filter((id) => properties[id]?.ownerId === playerId && !properties[id]?.mortgaged).length;
 
 const countUtilitiesOwned = (properties, playerId) =>
-  UTILITY_TILE_IDS.filter((id) => properties[id]?.ownerId === playerId).length;
+  UTILITY_TILE_IDS.filter((id) => properties[id]?.ownerId === playerId && !properties[id]?.mortgaged).length;
 
 const calculateRent = (properties, players, tileId, landingPlayerId, diceTotal) => {
   const prop = properties[tileId];

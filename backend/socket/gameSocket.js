@@ -56,6 +56,8 @@ const {
   declareBankruptcy,
   requestEndGame,
   voteEndGame,
+  requestKickHost,
+  voteKickHost,
   skipAfkTurn,
 
   // Trade
@@ -72,7 +74,11 @@ const {
   // Constants
   EVENT_TYPES,
   TURN_TIMEOUT_SECONDS,
+  PLAYER_TOKENS,
 } = require('../game-engine/gameEngine');
+
+const { saveRoom, deleteRoom, loadActiveRooms } = require('./roomModel');
+const { BOARD_TILES, TILE_BY_ID, hasMonopoly, canBuildHouse, canBuildHotel } = require('../game-engine/boardData');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ROOM STORE  (in-memory; swap for Redis when scaling horizontally)
@@ -158,14 +164,16 @@ const ackOk = (cb, data) => {
  * @returns {Object|undefined}
  */
 const findPlayerBySocket = (room, socketId) =>
-  room.players.find((p) => p.socketId === socketId);
+  room.players.find((p) => p.socketId === socketId) ||
+  (room.spectators || []).find((p) => p.socketId === socketId);
 
 /**
  * Find a player entry in a room by persistent player id.
  * @returns {Object|undefined}
  */
 const findPlayerById = (room, playerId) =>
-  room.players.find((p) => p.id === playerId);
+  room.players.find((p) => p.id === playerId) ||
+  (room.spectators || []).find((p) => p.id === playerId);
 
 /**
  * Build the lobby snapshot to broadcast on room-updated.
@@ -180,6 +188,12 @@ const lobbySnapshot = (room) => ({
     username:  p.username,
     ready:     p.ready,
     connected: p.connected,
+    token:     p.token,
+  })),
+  spectators: (room.spectators || []).map((p) => ({
+    id:        p.id,
+    username:  p.username,
+    connected: p.connected,
   })),
 });
 
@@ -191,12 +205,46 @@ const emitRoomUpdated = (io, room) => {
   const snapshot = lobbySnapshot(room);
   console.log('[emit] room-updated ->', room.code, snapshot.players.length);
   io.to(room.code).emit('room-updated', envelope(true, snapshot));
+  saveRoom(room);
 };
 
 /**
  * Broadcast the current game state to every socket in the room,
  * using the player-specific projection (includes _myId).
  */
+const _recordCompletedMatch = (room) => {
+  try {
+    const { saveMatch } = require('./matchModel');
+    
+    // Compile players list
+    const players = room.players.map(p => p.username);
+    
+    // Determine winner
+    const winnerId = room.gameState.winnerId || room.gameState.ranking?.[0]?.playerId;
+    const winnerPlayer = room.players.find(p => p.id === winnerId);
+    const winnerName = winnerPlayer ? winnerPlayer.username : (room.gameState.winnerName || 'Unknown Landlord');
+    
+    // Final rankings
+    const rankings = room.gameState.ranking || [];
+    
+    // Duration
+    const duration = Math.floor((Date.now() - (room.createdAt || Date.now())) / 1000);
+    
+    const matchData = {
+      matchId: `${room.code}_${Date.now()}`,
+      date: new Date(),
+      duration: Math.max(0, duration),
+      players,
+      winner: winnerName,
+      rankings
+    };
+    
+    saveMatch(matchData);
+  } catch (err) {
+    console.error('[gameSocket] Failed to record completed match:', err.message);
+  }
+};
+
 const broadcastGameState = (io, room) => {
   if (!room.gameState) return;
   room.players.forEach((p) => {
@@ -205,11 +253,52 @@ const broadcastGameState = (io, room) => {
       io.to(p.socketId).emit('game-updated', envelope(true, state));
     }
   });
+
+  // Automatically record match history exactly once when match is finished
+  if (room.gameState.status === 'finished' && !room.matchSaved) {
+    room.matchSaved = true;
+    _recordCompletedMatch(room);
+  }
+
+  saveRoom(room);
+};
+
+/**
+ * Dynamically maps a game event type and message text to a premium emoji indicator.
+ */
+const getEventEmoji = (type, message) => {
+  if (!message) return '🔔';
+
+  const trimmed = message.trim();
+  const firstCode = trimmed.codePointAt(0);
+  if (firstCode > 127) {
+    return ''; // Message already starts with an emoji
+  }
+
+  const t = String(type || '').toUpperCase();
+  const m = String(message || '').toLowerCase();
+
+  if (t.includes('DICE') || t.includes('ROLL') || m.includes('rolled')) return '🎲';
+  if (t.includes('BUY') || t.includes('PURCHASE') || m.includes('purchased')) return '🏠';
+  if (t.includes('RENT') || m.includes('rent')) return '💸';
+  if (t.includes('JAIL_FINE') || m.includes('paid fine') || m.includes('paid ₹500')) return '🔓';
+  if (t.includes('JAIL') || m.includes('jail') || m.includes('arrested')) return '🔒';
+  if (m.includes('loan approved') || m.includes('took loan')) return '💰';
+  if (m.includes('loan repaid')) return '💵';
+  if (t.includes('BANKRUPTCY') || m.includes('bankrupt')) return '☠️';
+  if (t.includes('GAME_OVER') || m.includes('winner') || m.includes('ended')) return '🏆';
+  if (t.includes('TRADE') || m.includes('trade')) return '🤝';
+  if (t.includes('BUILD') || m.includes('built')) return '🏗️';
+  if (t.includes('MORTGAGE') || m.includes('mortgaged')) return '🏦';
+  if (t.includes('UNMORTGAGE') || m.includes('unmortgaged')) return '🔓';
+
+  return '🔔';
 };
 
 /**
  * Broadcast game events array to all sockets in the room.
  * Events drive client animations / toast notifications.
+ * Additionally convert gameplay event logs into system chat messages.
  */
 const broadcastEvents = (io, room, events) => {
   if (!events || events.length === 0) return;
@@ -231,6 +320,73 @@ const broadcastEvents = (io, room, events) => {
       const p = room.players.find((player) => player.id === ev.payload.playerId);
       if (p && p.socketId) {
         io.to(p.socketId).emit('loan-repaid', envelope(true, { playerId: ev.payload.playerId }));
+      }
+    }
+  });
+
+  // Dynamic bot reactive commentaries
+  try {
+    handleBotChatInteractions(io, room, events);
+  } catch (err) {
+    console.error("[Bot Chat Interactions Error]", err);
+  }
+};
+
+const handleBotChatInteractions = (io, room, events) => {
+  if (!events || events.length === 0) return;
+
+  events.forEach((ev) => {
+    // 1. Rent Paid Hook
+    if (ev.type === 'RENT_PAID') {
+      const { payerId, ownerId, amount } = ev.payload;
+      const payer = room.players.find(p => p.id === payerId);
+      const owner = room.players.find(p => p.id === ownerId);
+
+      if (payer && owner) {
+        if (owner.isBot && !payer.isBot) {
+          // Bot is receiving rent from human
+          const botQuotes = [
+            `Thanks for the rent, @${payer.username}! Please visit again! 💸`,
+            `A pleasure doing business with you, @${payer.username}! That really boosts my reserves! 💰`,
+            `A premium location deserves premium rent, @${payer.username}! 😉`
+          ];
+          const quote = botQuotes[Math.floor(Math.random() * botQuotes.length)];
+          setTimeout(() => {
+            sendBotChatMessage(io, room, owner.id, quote);
+          }, 1500);
+        } else if (payer.isBot && !owner.isBot) {
+          // Bot is paying rent to human
+          const botQuotes = [
+            `Ouch! That really hurt my balance sheet, @${owner.username}... 😭`,
+            `₹${amount} is a steep price for a single night! 🏨`,
+            `Well played, @${owner.username}. You built a fine trap here! 👏`
+          ];
+          const quote = botQuotes[Math.floor(Math.random() * botQuotes.length)];
+          setTimeout(() => {
+            sendBotChatMessage(io, room, payer.id, quote);
+          }, 1500);
+        }
+      }
+    }
+    
+    // 2. Bankruptcy Hook
+    else if (ev.type === 'BANKRUPTCY') {
+      const { playerId } = ev.payload;
+      const bankruptPlayer = room.players.find(p => p.id === playerId);
+      if (bankruptPlayer) {
+        if (bankruptPlayer.isBot) {
+          setTimeout(() => {
+            sendBotChatMessage(io, room, bankruptPlayer.id, "Alas, my business empire has collapsed. Well played, everyone! 🏳️");
+          }, 2000);
+        } else {
+          // human player went bankrupt, let an active bot comment
+          const activeBot = room.players.find(p => p.isBot && !p.isBankrupt && room.gameState?.players[p.id] && !room.gameState.players[p.id].isBankrupt);
+          if (activeBot) {
+            setTimeout(() => {
+              sendBotChatMessage(io, room, activeBot.id, `Ah, the harsh reality of the Indian market. Tough luck, @${bankruptPlayer.username}! You played well. 🤝`);
+            }, 2000);
+          }
+        }
       }
     }
   });
@@ -281,6 +437,7 @@ const destroyRoom = (io, room) => {
   room.players.forEach((p) => socketToRoom.delete(p.socketId));
   rooms.delete(room.code);
   io.to(room.code).emit('room-destroyed', envelope(true, { code: room.code }));
+  deleteRoom(room.code);
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -314,13 +471,545 @@ const _dispatch = (io, socket, room, playerId, engineFn, args = [], ack) => {
 
   ackOk(ack, { events: result.events });
 
+  // CHECK IF HOST WAS KICKED BY VOTE
+  if (room.gameState && room.gameState.hostKickedPending) {
+    const hostId = room.hostId;
+    const hostPlayer = room.players.find((p) => p.id === hostId);
+    if (hostPlayer) {
+      // Find the next human player to assign host privilege to
+      const nextHost = room.players.find((p) => p.id !== hostId && !p.isBot);
+      if (nextHost) {
+        room.hostId = nextHost.id;
+        console.log(`[room] Host kicked. Reassigned host role to ${nextHost.username}`);
+      }
+
+      // Remove kicked host from room players
+      room.players = room.players.filter((p) => p.id !== hostId);
+      socketToRoom.delete(hostPlayer.socketId);
+
+      // Notify host socket they were kicked
+      io.to(hostPlayer.socketId).emit('kicked', envelope(true, { code: room.code }));
+
+      // Make host socket leave Socket.io room
+      const hostSocket = io.sockets.sockets.get(hostPlayer.socketId);
+      if (hostSocket) hostSocket.leave(room.code);
+
+      // Send a separate player-left event to other players
+      io.to(room.code).emit('player-left', envelope(true, {
+        playerId: hostId,
+        username: hostPlayer.username,
+        room: lobbySnapshot(room),
+      }));
+    }
+    room.gameState.hostKickedPending = false;
+  }
+
   broadcastEvents(io, room, result.events);
   broadcastGameState(io, room);
 
   // Restart AFK timer after every successful action
   startAfkTimer(io, room);
 
+  triggerBotCycle(io, room);
+
   return true;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BOT DECISIONS & HEURISTICS
+// ─────────────────────────────────────────────────────────────────────────────
+
+const _completesMonopolyForPlayer = (gameState, playerId, tileId) => {
+  const tile = TILE_BY_ID[tileId];
+  if (!tile || !tile.group) return false;
+  const groupTiles = BOARD_TILES.filter(t => t.group === tile.group);
+  return groupTiles.every(t => t.id === tileId || gameState.properties[t.id].ownerId === playerId);
+};
+
+// Realistic Bot Helpers
+const _isGroupHotForOthers = (gameState, botId, group) => {
+  if (!group) return false;
+  const groupTiles = BOARD_TILES.filter(t => t.group === group);
+  const ownerCounts = {};
+  for (const t of groupTiles) {
+    const ownerId = gameState.properties[t.id]?.ownerId;
+    if (ownerId && ownerId !== botId) {
+      ownerCounts[ownerId] = (ownerCounts[ownerId] || 0) + 1;
+    }
+  }
+  for (const [ownerId, count] of Object.entries(ownerCounts)) {
+    const totalInGroup = groupTiles.length;
+    if (count === totalInGroup - 1) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const sendBotChatMessage = (io, room, botId, text) => {
+  const botPlayer = room.players.find(p => p.id === botId);
+  if (!botPlayer) return;
+
+  const message = {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    playerId: botId,
+    username: botPlayer.username,
+    text: text,
+    ts: Date.now()
+  };
+
+  room.chatHistory.push(message);
+  if (room.chatHistory.length > MAX_CHAT_HISTORY) {
+    room.chatHistory.splice(0, room.chatHistory.length - MAX_CHAT_HISTORY);
+  }
+
+  io.to(room.code).emit('receive-message', envelope(true, { message }));
+  saveRoom(room);
+};
+
+const proposeBotTradeProactive = (io, room, botId) => {
+  const gameState = room.gameState;
+  if (!gameState) return false;
+
+  // Avoid proposing trades if a trade is already active
+  if (gameState.activeTrade) return false;
+
+  // Reset or check turn flag
+  if (room.lastProposedTradeTurnIdx === gameState.currentTurnIdx) {
+    return false;
+  }
+
+  const player = gameState.players[botId];
+  if (!player || player.isBankrupt || player.money < 500) return false;
+
+  // Find color groups we want to complete
+  const groups = {};
+  for (const tile of BOARD_TILES) {
+    if (tile.group) {
+      if (!groups[tile.group]) groups[tile.group] = [];
+      groups[tile.group].push(tile.id);
+    }
+  }
+
+  // Analyze each group
+  for (const [groupName, tileIds] of Object.entries(groups)) {
+    const ownedByBot = tileIds.filter(id => gameState.properties[id]?.ownerId === botId);
+    const totalInGroup = tileIds.length;
+
+    // We own part of the group, but not all (not a monopoly yet)
+    if (ownedByBot.length > 0 && ownedByBot.length < totalInGroup) {
+      // Find the missing tile(s)
+      const missingIds = tileIds.filter(id => {
+        const pState = gameState.properties[id];
+        return pState && pState.ownerId && pState.ownerId !== botId;
+      });
+
+      if (missingIds.length === 1) {
+        const missingId = missingIds[0];
+        const targetOwnerId = gameState.properties[missingId].ownerId;
+        const targetOwner = gameState.players[targetOwnerId];
+
+        if (targetOwner && !targetOwner.isBankrupt && !targetOwner.isBot) {
+          // We can propose to this human player!
+          const missingTile = TILE_BY_ID[missingId];
+          const cashOffer = Math.floor(missingTile.price * 1.35);
+
+          if (player.money >= cashOffer + 400) {
+            // Propose trade!
+            room.lastProposedTradeTurnIdx = gameState.currentTurnIdx;
+            console.log(`🤖 Bot ${player.username} proposing trade to ${targetOwner.username}: offering ${cashOffer} for ${missingTile.name}`);
+
+            // Broadcast trade commentary
+            sendBotChatMessage(io, room, botId, `Hey @${targetOwner.username}, I really want to complete my ${groupName} set. I'll offer you ₹${cashOffer} for ${missingTile.name}. What do you say? 🤝`);
+
+            _dispatch(io, null, room, botId, initiateTrade, [
+              targetOwnerId,
+              { money: cashOffer, propertyIds: [] },
+              { money: 0, propertyIds: [missingId] }
+            ]);
+            return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+};
+
+const raiseBotCash = (io, room, botId) => {
+  const gameState = room.gameState;
+  const player = gameState.players[botId];
+  if (player.money >= 0) return false;
+
+  // 1. Take loan if not active
+  if (!player.loanActive) {
+    const debt = -player.money;
+    const amount = Math.min(5000, Math.max(500, Math.ceil(debt / 500) * 500));
+    console.log(`🤖 Bot ${player.username} taking loan of ${amount} to resolve debt of ${debt}`);
+    return _dispatch(io, null, room, botId, takeLoan, [amount]);
+  }
+
+  // 2. Sell hotels
+  for (const tileId of Object.keys(gameState.properties)) {
+    const prop = gameState.properties[tileId];
+    if (prop.ownerId === botId && prop.hotel) {
+      console.log(`🤖 Bot ${player.username} selling hotel on tile ${tileId}`);
+      return _dispatch(io, null, room, botId, sellHotel, [Number(tileId)]);
+    }
+  }
+
+  // 3. Sell houses
+  for (const tileId of Object.keys(gameState.properties)) {
+    const prop = gameState.properties[tileId];
+    if (prop.ownerId === botId && prop.houses > 0) {
+      console.log(`🤖 Bot ${player.username} selling house on tile ${tileId}`);
+      return _dispatch(io, null, room, botId, sellHouse, [Number(tileId)]);
+    }
+  }
+
+  // 4. Mortgage properties not part of a monopoly first
+  const myProperties = Object.keys(gameState.properties).filter(tileId => {
+    const prop = gameState.properties[tileId];
+    return prop.ownerId === botId && !prop.mortgaged;
+  }).map(Number);
+
+  if (myProperties.length > 0) {
+    myProperties.sort((a, b) => {
+      const monA = hasMonopoly(gameState.properties, botId, a);
+      const monB = hasMonopoly(gameState.properties, botId, b);
+      if (monA && !monB) return 1;
+      if (!monA && monB) return -1;
+      return 0;
+    });
+
+    const targetTileId = myProperties[0];
+    console.log(`🤖 Bot ${player.username} mortgaging tile ${targetTileId}`);
+    return _dispatch(io, null, room, botId, mortgageProperty, [targetTileId]);
+  }
+
+  // 5. Declare bankruptcy if no assets left
+  console.log(`🤖 Bot ${player.username} declaring bankruptcy`);
+  return _dispatch(io, null, room, botId, declareBankruptcy, []);
+};
+
+const upgradeBotProperties = (io, room, botId) => {
+  const gameState = room.gameState;
+  const player = gameState.players[botId];
+  if (player.money < 1500) return false;
+
+  for (const tileId of Object.keys(gameState.properties)) {
+    const tile = TILE_BY_ID[tileId];
+    if (!tile || !tile.houseCost) continue;
+
+    // Check hotel upgrade first
+    const checkHotel = canBuildHotel(gameState.properties, botId, Number(tileId));
+    if (checkHotel.canBuild && player.money >= 1500 + tile.houseCost) {
+      console.log(`🤖 Bot ${player.username} upgrading to hotel on tile ${tileId}`);
+      return _dispatch(io, null, room, botId, buildHotel, [Number(tileId)]);
+    }
+
+    // Check house upgrade
+    const checkHouse = canBuildHouse(gameState.properties, botId, Number(tileId));
+    if (checkHouse.canBuild && player.money >= 1500 + tile.houseCost) {
+      console.log(`🤖 Bot ${player.username} building house on tile ${tileId}`);
+      return _dispatch(io, null, room, botId, buildHouse, [Number(tileId)]);
+    }
+  }
+
+  return false;
+};
+
+const executeBotAuctionDecision = async (io, room, botId) => {
+  const gameState = room.gameState;
+  const auction = gameState.activeAuction;
+  if (!auction) return;
+
+  const player = gameState.players[botId];
+  if (!player || player.isBankrupt) return;
+
+  const tile = TILE_BY_ID[auction.tileId];
+  
+  // Dynamic strategic ceiling calculations
+  let ceilingFactor = 0.80 + Math.random() * 0.10; // Baseline ceiling: 80% to 90%
+  let isSpecialBid = false;
+  let chatComment = '';
+
+  if (_completesMonopolyForPlayer(gameState, botId, auction.tileId)) {
+    ceilingFactor = 1.15; // Monopoly completion boost!
+    isSpecialBid = true;
+    chatComment = `This completes my monopoly on ${tile.group}! I am going all in! 🚀`;
+  } else if (_isGroupHotForOthers(gameState, botId, tile.group)) {
+    ceilingFactor = 0.95; // Defensive blocking bid
+    isSpecialBid = true;
+    chatComment = `Not so fast! I can't let you get a monopoly on ${tile.group} that easily! 😉`;
+  }
+
+  const ceiling = Math.floor(tile.price * ceilingFactor);
+  
+  // Random human-like increments: 50, 100, 150, or 200
+  const possibleIncrements = [50, 100, 150, 200];
+  const randInc = possibleIncrements[Math.floor(Math.random() * possibleIncrements.length)];
+  const nextBid = auction.highBid + randInc;
+
+  if (auction.highBid < ceiling && player.money >= nextBid) {
+    console.log(`🤖 Bot ${player.username} placing auction bid of ${nextBid} for ${tile.name} (ceiling: ${ceiling})`);
+    
+    // Post chat commentary occasionally or during high stakes
+    if (isSpecialBid && Math.random() < 0.6) {
+      sendBotChatMessage(io, room, botId, chatComment);
+    } else if (Math.random() < 0.15) {
+      sendBotChatMessage(io, room, botId, `I'll raise to ₹${nextBid} for ${tile.name}! 📈`);
+    }
+
+    _dispatch(io, null, room, botId, placeBid, [nextBid]);
+  } else {
+    console.log(`🤖 Bot ${player.username} passing on auction for ${tile.name} (highBid: ${auction.highBid}, ceiling: ${ceiling})`);
+    if (Math.random() < 0.15) {
+      sendBotChatMessage(io, room, botId, `I'm out of this auction for ${tile.name}. Too rich for my blood! 💸`);
+    }
+    _dispatch(io, null, room, botId, passAuction, []);
+  }
+};
+
+const evaluateBotTradeDecision = async (io, room, botId) => {
+  const gameState = room.gameState;
+  const trade = gameState.activeTrade;
+  if (!trade || trade.status !== 'pending') return;
+
+  const player = gameState.players[botId];
+  if (!player || player.isBankrupt) return;
+
+  // Proposer gives to bot:
+  let receiveVal = trade.offer.money ?? 0;
+  for (const propId of (trade.offer.propertyIds ?? [])) {
+    const tile = TILE_BY_ID[propId];
+    if (!tile) continue;
+    let propVal = tile.price;
+    const propState = gameState.properties[propId];
+    if (propState && propState.houses > 0) {
+      propVal += (propState.houses * tile.houseCost) / 2;
+    }
+    // Strategic multipliers
+    if (_completesMonopolyForPlayer(gameState, botId, propId)) {
+      propVal *= 1.8;
+    } else {
+      const inSameGroup = BOARD_TILES.some(t => t.id !== propId && t.group === tile.group && gameState.properties[t.id].ownerId === botId);
+      if (inSameGroup) {
+        propVal *= 1.3;
+      }
+    }
+    receiveVal += propVal;
+  }
+
+  // Bot gives to proposer:
+  let giveVal = trade.request.money ?? 0;
+  for (const propId of (trade.request.propertyIds ?? [])) {
+    const tile = TILE_BY_ID[propId];
+    if (!tile) continue;
+    let propVal = tile.price;
+    // Strategic multipliers
+    if (hasMonopoly(gameState.properties, botId, propId)) {
+      propVal *= 2.0;
+    } else if (_completesMonopolyForPlayer(gameState, trade.fromPlayerId, propId)) {
+      propVal *= 1.8;
+    }
+    giveVal += propVal;
+  }
+
+  console.log(`🤖 Bot ${player.username} trade evaluation: receiveVal = ${receiveVal}, giveVal = ${giveVal}`);
+
+  if (receiveVal >= 0.90 * giveVal) {
+    console.log(`🤖 Bot ${player.username} accepting trade proposal`);
+    sendBotChatMessage(io, room, botId, "This looks like a fair deal! I accept. Let's make progress! 🤝");
+    _dispatch(io, null, room, botId, acceptTrade, []);
+  } else {
+    console.log(`🤖 Bot ${player.username} rejecting trade proposal`);
+    sendBotChatMessage(io, room, botId, "Sorry, that trade doesn't make sense for me. I'll have to reject. ❌");
+    _dispatch(io, null, room, botId, rejectTrade, []);
+  }
+};
+
+const executeBotTurn = async (io, room, botId) => {
+  const gameState = room.gameState;
+  const player = gameState.players[botId];
+  if (!player || player.isBankrupt) return;
+
+  // 1. Debt raising check
+  if (player.money < 0) {
+    raiseBotCash(io, room, botId);
+    return;
+  }
+
+  // 2. Jail handling
+  if (player.inJail) {
+    if (!gameState.hasRolled) {
+      // Escape jail heuristics
+      if (player.jailCard) {
+        console.log(`🤖 Bot ${player.username} using jail card`);
+        _dispatch(io, null, room, botId, useJailCard, []);
+      } else if (player.money >= 1000) {
+        console.log(`🤖 Bot ${player.username} paying jail fine`);
+        _dispatch(io, null, room, botId, payJailFine, []);
+      } else {
+        console.log(`🤖 Bot ${player.username} rolling to escape jail`);
+        _dispatch(io, null, room, botId, rollDice, []);
+      }
+    } else {
+      console.log(`🤖 Bot ${player.username} ending turn (still in jail)`);
+      _dispatch(io, null, room, botId, endTurn, []);
+    }
+    return;
+  }
+
+  // 3. Normal turn execution
+  if (!gameState.hasRolled) {
+    console.log(`🤖 Bot ${player.username} rolling dice`);
+    _dispatch(io, null, room, botId, rollDice, []);
+  } else {
+    // Already rolled
+    if (gameState.pendingAction === 'buy_decision') {
+      const tile = TILE_BY_ID[player.position];
+      if (tile && player.money >= tile.price) {
+        console.log(`🤖 Bot ${player.username} buying property ${tile.name}`);
+        _dispatch(io, null, room, botId, buyProperty, []);
+      } else {
+        console.log(`🤖 Bot ${player.username} sending property ${tile.name} to auction`);
+        _dispatch(io, null, room, botId, auctionProperty, [tile.id]);
+      }
+    } else if (gameState.pendingAction === null) {
+      const upgraded = upgradeBotProperties(io, room, botId);
+      if (upgraded) return;
+
+      // Proactive trade check
+      const tradeProposed = proposeBotTradeProactive(io, room, botId);
+      if (tradeProposed) return;
+
+      console.log(`🤖 Bot ${player.username} ending turn`);
+      _dispatch(io, null, room, botId, endTurn, []);
+    }
+  }
+};
+
+const triggerBotCycle = (io, room) => {
+  if (!room.gameState || room.gameState.status !== 'playing') return;
+  if (room.botExecutingAction) return;
+
+  // 0. Check if there is an active end game vote
+  const endGameVote = room.gameState.endGameVote;
+  if (endGameVote) {
+    const botToAct = room.players.find(p => 
+      p.isBot && 
+      !room.gameState.players[p.id]?.isBankrupt &&
+      endGameVote.votes[p.id] === undefined
+    );
+
+    if (botToAct) {
+      room.botExecutingAction = true;
+      setTimeout(async () => {
+        try {
+          console.log(`🤖 Bot ${botToAct.username} automatically voting YES to end game request`);
+          _dispatch(io, null, room, botToAct.id, voteEndGame, [true]);
+        } catch (err) {
+          console.error('[Bot End Game Vote Error]', err);
+        } finally {
+          room.botExecutingAction = false;
+          triggerBotCycle(io, room);
+        }
+      }, 1500);
+      return;
+    }
+  }
+
+  // 0.1. Check if there is an active kick host vote
+  const kickHostVote = room.gameState.kickHostVote;
+  if (kickHostVote) {
+    const botToAct = room.players.find(p => 
+      p.isBot && 
+      !room.gameState.players[p.id]?.isBankrupt &&
+      p.id !== kickHostVote.targetId &&
+      kickHostVote.votes[p.id] === undefined
+    );
+
+    if (botToAct) {
+      room.botExecutingAction = true;
+      setTimeout(async () => {
+        try {
+          console.log(`🤖 Bot ${botToAct.username} automatically voting YES to kick host request`);
+          _dispatch(io, null, room, botToAct.id, voteKickHost, [true]);
+        } catch (err) {
+          console.error('[Bot Kick Host Vote Error]', err);
+        } finally {
+          room.botExecutingAction = false;
+          triggerBotCycle(io, room);
+        }
+      }, 1500);
+      return;
+    }
+  }
+
+  // 1. Check if there is an active auction and a bot needs to act
+  const auction = room.gameState.activeAuction;
+  if (auction) {
+    const botToAct = room.players.find(p => 
+      p.isBot && 
+      auction.participants.includes(p.id) && 
+      !auction.passedPlayers.includes(p.id) && 
+      auction.highBidderId !== p.id
+    );
+
+    if (botToAct) {
+      room.botExecutingAction = true;
+      setTimeout(async () => {
+        try {
+          await executeBotAuctionDecision(io, room, botToAct.id);
+        } catch (err) {
+          console.error('[Bot Auction Error]', err);
+        } finally {
+          room.botExecutingAction = false;
+          triggerBotCycle(io, room);
+        }
+      }, 1500);
+      return;
+    }
+  }
+
+  // 2. Check if there is an active pending trade proposed to a bot
+  const trade = room.gameState.activeTrade;
+  if (trade && trade.status === 'pending') {
+    const botToAct = room.players.find(p => p.isBot && p.id === trade.toPlayerId);
+    if (botToAct) {
+      room.botExecutingAction = true;
+      setTimeout(async () => {
+        try {
+          await evaluateBotTradeDecision(io, room, botToAct.id);
+        } catch (err) {
+          console.error('[Bot Trade Error]', err);
+        } finally {
+          room.botExecutingAction = false;
+          triggerBotCycle(io, room);
+        }
+      }, 1500);
+      return;
+    }
+  }
+
+  // 3. Check if it's a bot's standard turn
+  const activePlayer = currentPlayer(room.gameState);
+  if (activePlayer && room.players.find(p => p.id === activePlayer.id && p.isBot)) {
+    const botId = activePlayer.id;
+    room.botExecutingAction = true;
+    setTimeout(async () => {
+      try {
+        await executeBotTurn(io, room, botId);
+      } catch (err) {
+        console.error('[Bot Turn Error]', err);
+      } finally {
+        room.botExecutingAction = false;
+        triggerBotCycle(io, room);
+      }
+    }, 1500);
+    return;
+  }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -365,7 +1054,29 @@ const guardPlayer = (socket, room) => {
  * Attach all game socket handlers to an existing Socket.IO Server instance.
  * @param {import('socket.io').Server} io
  */
-module.exports = (io) => {
+const mountGameSocket = (io) => {
+  // Load active rooms from MongoDB at startup to recover from server reboots
+  loadActiveRooms().then((loadedRooms) => {
+    loadedRooms.forEach((r) => {
+      rooms.set(r.code, r);
+      console.log(`[db] Restored active room ${r.code} with ${r.players.length} players from database`);
+
+      // Restore socket associations for connected players
+      r.players.forEach((p) => {
+        if (p.socketId && p.connected) {
+          socketToRoom.set(p.socketId, r.code);
+        }
+      });
+
+      // Reconstruct AFK turn timers for active matches
+      if (r.status === 'playing') {
+        startAfkTimer(io, r);
+        console.log(`[db] Restarted AFK turn timer for restored room ${r.code}`);
+      }
+    });
+  }).catch((err) => {
+    console.error("[db] Failed to restore active rooms on startup:", err.message);
+  });
 
   io.on('connection', (socket) => {
 
@@ -381,7 +1092,7 @@ module.exports = (io) => {
      * Client payload: { username: string }
      * Ack:            { ok, data: { room: lobbySnapshot, playerId: string } }
      */
-   socket.on('create-room', ({ username } = {}, ack) => {
+   socket.on('create-room', ({ username, playerId: clientPlayerId } = {}, ack) => {
   console.log('🔥 create-room event received');
 
   if (!username || typeof username !== 'string' || !username.trim()) {
@@ -391,11 +1102,11 @@ module.exports = (io) => {
 
   const trimmed = username.trim().slice(0, 20);
   const code = uniqueRoomCode();
-  const playerId = socket.id;
+  const playerId = clientPlayerId || socket.id;
 
   const room = {
     code,
-    hostId: socket.id,
+    hostId: playerId,
     status: 'lobby',
     players: [
       {
@@ -405,11 +1116,13 @@ module.exports = (io) => {
         ready: false,
         connected: true,
         disconnectedAt: null,
+        token: PLAYER_TOKENS[0],
       },
     ],
     gameState: null,
     afkTimer: null,
     chatHistory: [],
+    createdAt: Date.now(),
   };
 
   rooms.set(code, room);
@@ -434,64 +1147,140 @@ module.exports = (io) => {
      * Ack:            { ok, data: { room, playerId } }
      * Broadcast:      'player-joined' → room
      */
-    socket.on('join-room', ({ code, username } = {}, ack) => {
-  console.log('🔥 join-room event received');
+    socket.on('join-room', ({ code, username, playerId: clientPlayerId, asSpectator } = {}, ack) => {
+      console.log('🔥 join-room event received', { asSpectator });
 
-  if (!code || !username) {
-    return ackError(ack, 'code and username are required');
-  }
+      if (!code || !username) {
+        return ackError(ack, 'code and username are required');
+      }
 
-  const trimmedCode = String(code).trim().toUpperCase();
-  const trimmedUser = String(username).trim().slice(0, 20);
+      const trimmedCode = String(code).trim().toUpperCase();
+      const trimmedUser = String(username).trim().slice(0, 20);
 
-  const room = rooms.get(trimmedCode);
+      const room = rooms.get(trimmedCode);
 
-  if (!room) {
-    console.log('❌ Room not found');
-    return ackError(ack, 'Room not found');
-  }
+      if (!room) {
+        console.log('❌ Room not found');
+        return ackError(ack, 'Room not found');
+      }
 
-  if (room.status !== 'lobby') {
-    return ackError(ack, 'Game already started');
-  }
+      if (room.status !== 'lobby' && !asSpectator) {
+        return ackError(ack, 'Game already started');
+      }
 
-  if (room.players.length >= MAX_PLAYERS) {
-    return ackError(ack, 'Room is full');
-  }
+      if (!asSpectator && room.players.length >= MAX_PLAYERS) {
+        return ackError(ack, 'Room is full');
+      }
 
-  const playerId = socket.id;
+      const playerId = clientPlayerId || socket.id;
 
-  const playerEntry = {
-    id: playerId,
-    username: trimmedUser,
-    socketId: socket.id,
-    ready: false,
-    connected: true,
-    disconnectedAt: null,
-  };
+      // Check if player already exists in players or spectators
+      let existingPlayer = room.players.find(p => p.id === playerId);
+      let existingSpectator = (room.spectators || []).find(p => p.id === playerId);
 
-  room.players.push(playerEntry);
+      if (!asSpectator && existingPlayer) {
+        const oldSocketId = existingPlayer.socketId;
+        if (oldSocketId) {
+          socketToRoom.delete(oldSocketId);
+        }
+        existingPlayer.socketId = socket.id;
+        existingPlayer.connected = true;
+        existingPlayer.disconnectedAt = null;
+        existingPlayer.username = trimmedUser; // Update name just in case
 
-  socketToRoom.set(socket.id, trimmedCode);
-  socket.join(trimmedCode);
+        socketToRoom.set(socket.id, trimmedCode);
+        socket.join(trimmedCode);
+        saveRoom(room);
+        emitRoomUpdated(io, room);
 
-  console.log(`✅ ${trimmedUser} joined ${trimmedCode}`);
+        console.log(`✅ ${trimmedUser} re-joined/restored connection to ${trimmedCode} as player`);
 
-  // Sync whole room to everyone
-  emitRoomUpdated(io, room);
+        return ackOk(ack, {
+          room: lobbySnapshot(room),
+          playerId,
+          isSpectator: false,
+        });
+      }
 
-  io.to(trimmedCode).emit(
-    'player-joined',
-    envelope(true, {
-      player: playerEntry,
-    })
-  );
+      if (asSpectator && existingSpectator) {
+        const oldSocketId = existingSpectator.socketId;
+        if (oldSocketId) {
+          socketToRoom.delete(oldSocketId);
+        }
+        existingSpectator.socketId = socket.id;
+        existingSpectator.connected = true;
+        existingSpectator.disconnectedAt = null;
+        existingSpectator.username = trimmedUser;
 
-  ackOk(ack, {
-    room: lobbySnapshot(room),
-    playerId,
-  });
-});
+        socketToRoom.set(socket.id, trimmedCode);
+        socket.join(trimmedCode);
+        saveRoom(room);
+        emitRoomUpdated(io, room);
+
+        console.log(`✅ ${trimmedUser} re-joined/restored connection to ${trimmedCode} as spectator`);
+
+        return ackOk(ack, {
+          room: lobbySnapshot(room),
+          playerId,
+          isSpectator: true,
+        });
+      }
+
+      // If switching role from spectator to player
+      if (!asSpectator && existingSpectator) {
+        if (room.players.length >= MAX_PLAYERS) {
+          return ackError(ack, 'Room is full');
+        }
+        room.spectators = (room.spectators || []).filter(p => p.id !== playerId);
+      }
+
+      // If switching role from player to spectator
+      if (asSpectator && existingPlayer) {
+        room.players = room.players.filter(p => p.id !== playerId);
+      }
+
+      const takenTokens = room.players.map(p => p.token).filter(Boolean);
+      const defaultToken = PLAYER_TOKENS.find(t => !takenTokens.includes(t)) || PLAYER_TOKENS[0];
+
+      const playerEntry = {
+        id: playerId,
+        username: trimmedUser,
+        socketId: socket.id,
+        ready: false,
+        connected: true,
+        disconnectedAt: null,
+        isSpectator: Boolean(asSpectator),
+        token: asSpectator ? null : defaultToken,
+      };
+
+      if (asSpectator) {
+        room.spectators = room.spectators || [];
+        room.spectators.push(playerEntry);
+      } else {
+        room.players.push(playerEntry);
+      }
+
+      socketToRoom.set(socket.id, trimmedCode);
+      socket.join(trimmedCode);
+
+      console.log(`✅ ${trimmedUser} joined ${trimmedCode} as ${asSpectator ? 'spectator' : 'player'}`);
+
+      // Sync whole room to everyone
+      emitRoomUpdated(io, room);
+
+      io.to(trimmedCode).emit(
+        'player-joined',
+        envelope(true, {
+          player: playerEntry,
+        })
+      );
+
+      ackOk(ack, {
+        room: lobbySnapshot(room),
+        playerId,
+        isSpectator: Boolean(asSpectator),
+      });
+    });
 
     // ── leave-room ────────────────────────────────────────────────────────────
     /**
@@ -541,6 +1330,8 @@ module.exports = (io) => {
         room.gameState.players[playerId].isConnected = true;
       }
 
+      saveRoom(room);
+
       console.log(`[room] ${player.username} reconnected to ${trimmedCode}`);
 
       // Notify others
@@ -553,6 +1344,9 @@ module.exports = (io) => {
       const responseData = { room: lobbySnapshot(room) };
       if (room.gameState) {
         responseData.gameState = getPlayerState(room.gameState, playerId);
+      }
+      if (player.isSpectator) {
+        responseData.isSpectator = true;
       }
 
       ackOk(ack, responseData);
@@ -576,11 +1370,48 @@ module.exports = (io) => {
 
       const player = findPlayerBySocket(room, socket.id);
       if (!player) return ackError(ack, 'Player not found');
+      if (player.isSpectator) return ackError(ack, 'Spectators cannot toggle ready status');
 
       player.ready = Boolean(ready);
 
       emitRoomUpdated(io, room);
       ackOk(ack, { ready: player.ready });
+    });
+
+    // ── select-token ──────────────────────────────────────────────────────────
+    /**
+     * Client payload: { token: string }
+     * Broadcast:      'room-updated' → room
+     */
+    socket.on('select-token', ({ token } = {}, ack) => {
+      const gr = guardInRoom(socket);
+      if (!gr.ok) return ackError(ack, gr.error);
+      const { room } = gr;
+
+      if (room.status !== 'lobby') return ackError(ack, 'Game already started');
+
+      const player = findPlayerBySocket(room, socket.id);
+      if (!player) return ackError(ack, 'Player not found');
+      if (player.isSpectator) return ackError(ack, 'Spectators cannot select tokens');
+
+      if (!token || typeof token !== 'string') return ackError(ack, 'token is required');
+      if (!PLAYER_TOKENS.includes(token)) return ackError(ack, 'Invalid token symbol');
+
+      // Check if already taken by another player/bot
+      const isTaken = room.players.some((p, idx) => {
+        if (p.id === player.id) return false;
+        const activeToken = p.token || PLAYER_TOKENS[idx % PLAYER_TOKENS.length];
+        return activeToken === token;
+      });
+
+      if (isTaken) {
+        return ackError(ack, 'This token is already selected by another player');
+      }
+
+      player.token = token;
+      saveRoom(room);
+      emitRoomUpdated(io, room);
+      ackOk(ack, { token: player.token });
     });
 
     // ── start-game ────────────────────────────────────────────────────────────
@@ -595,7 +1426,8 @@ module.exports = (io) => {
       const { room } = gr;
 
       if (room.status !== 'lobby')          return ackError(ack, 'Game already started');
-      if (room.hostId !== socket.id)        return ackError(ack, 'Only the host can start the game');
+      const player = findPlayerBySocket(room, socket.id);
+      if (!player || room.hostId !== player.id) return ackError(ack, 'Only the host can start the game');
       if (room.players.length < MIN_PLAYERS) return ackError(ack, `Need at least ${MIN_PLAYERS} players`);
 
       const notReady = room.players.filter((p) => !p.ready).map((p) => p.username);
@@ -608,15 +1440,28 @@ module.exports = (io) => {
         id:       p.id,
         username: p.username,
         socketId: p.socketId,
+        isBot:    Boolean(p.isBot),
+        token:    p.token,
       }));
 
       const initResult = initializeGame(room.code, enginePlayers);
       if (!initResult.ok) return ackError(ack, initResult.error);
 
       room.gameState = initResult.gameState;
+      // Copy isBot field into gameState.players just in case
+      room.players.forEach(p => {
+        if (p.isBot && room.gameState.players[p.id]) {
+          room.gameState.players[p.id].isBot = true;
+          room.gameState.players[p.id].socketId = null;
+          room.gameState.players[p.id].isConnected = true;
+        }
+      });
       room.status    = 'playing';
 
       console.log(`[game] started in room ${room.code} with ${room.players.length} players`);
+
+      // Sync whole room to everyone
+      emitRoomUpdated(io, room);
 
       io.to(room.code).emit('game-started', envelope(true, {
         room: lobbySnapshot(room),
@@ -628,6 +1473,66 @@ module.exports = (io) => {
       // Start AFK watchdog for first player
       startAfkTimer(io, room);
 
+      ackOk(ack, {});
+
+      // Trigger bot standard turn cycle if the starting player is a bot!
+      triggerBotCycle(io, room);
+    });
+
+    // ── add-bot ───────────────────────────────────────────────────────────────
+    socket.on('add-bot', (_, ack) => {
+      const gr = guardInRoom(socket);
+      if (!gr.ok) return ackError(ack, gr.error);
+      const { room } = gr;
+
+      if (room.status !== 'lobby') return ackError(ack, 'Game already started');
+      const player = findPlayerBySocket(room, socket.id);
+      if (!player || room.hostId !== player.id) return ackError(ack, 'Only the host can add bots');
+      if (room.players.length >= MAX_PLAYERS) return ackError(ack, 'Room is full');
+
+      const botNames = ['Birbal', 'Tenali', 'Chanakya', 'Aryabhata', 'Shakuntala', 'Vikram', 'Kalidasa'];
+      // Filter out names already in the room
+      const existingNames = room.players.map(p => p.username.replace('🤖 Bot ', ''));
+      const availableNames = botNames.filter(name => !existingNames.includes(name));
+      const name = availableNames.length > 0 ? availableNames[0] : `Bot_${Math.floor(Math.random() * 100)}`;
+
+      const takenTokens = room.players.map(p => p.token).filter(Boolean);
+      const defaultToken = PLAYER_TOKENS.find(t => !takenTokens.includes(t)) || PLAYER_TOKENS[0];
+
+      const botPlayer = {
+        id: `bot-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        username: `🤖 Bot ${name}`,
+        socketId: null,
+        ready: true,
+        connected: true,
+        disconnectedAt: null,
+        isBot: true,
+        token: defaultToken,
+      };
+
+      room.players.push(botPlayer);
+      saveRoom(room);
+      emitRoomUpdated(io, room);
+      ackOk(ack, { player: botPlayer });
+    });
+
+    // ── remove-bot ────────────────────────────────────────────────────────────
+    socket.on('remove-bot', ({ playerId } = {}, ack) => {
+      const gr = guardInRoom(socket);
+      if (!gr.ok) return ackError(ack, gr.error);
+      const { room } = gr;
+
+      if (room.status !== 'lobby') return ackError(ack, 'Game already started');
+      const player = findPlayerBySocket(room, socket.id);
+      if (!player || room.hostId !== player.id) return ackError(ack, 'Only the host can remove bots');
+      if (!playerId) return ackError(ack, 'playerId is required');
+
+      const bot = room.players.find(p => p.id === playerId && p.isBot);
+      if (!bot) return ackError(ack, 'Bot not found');
+
+      room.players = room.players.filter(p => p.id !== playerId);
+      saveRoom(room);
+      emitRoomUpdated(io, room);
       ackOk(ack, {});
     });
 
@@ -833,6 +1738,26 @@ module.exports = (io) => {
       _dispatch(io, socket, gr.room, player.id, voteEndGame, [Boolean(accept)], ack);
     });
 
+    // ── request-kick-host ─────────────────────────────────────────────────────
+    socket.on('request-kick-host', (_, ack) => {
+      const gr = guardInRoom(socket);  if (!gr.ok) return ackError(ack, gr.error);
+      const gp = guardPlaying(gr.room); if (!gp.ok) return ackError(ack, gp.error);
+      const player = findPlayerBySocket(gr.room, socket.id);
+      if (!player) return ackError(ack, 'You are not in this game');
+
+      _dispatch(io, socket, gr.room, player.id, requestKickHost, [gr.room.hostId], ack);
+    });
+
+    // ── vote-kick-host ───────────────────────────────────────────────────────
+    socket.on('vote-kick-host', ({ accept } = {}, ack) => {
+      const gr = guardInRoom(socket);  if (!gr.ok) return ackError(ack, gr.error);
+      const gp = guardPlaying(gr.room); if (!gp.ok) return ackError(ack, gp.error);
+      const player = findPlayerBySocket(gr.room, socket.id);
+      if (!player) return ackError(ack, 'You are not in this game');
+
+      _dispatch(io, socket, gr.room, player.id, voteKickHost, [Boolean(accept)], ack);
+    });
+
     // =========================================================================
     // 6.  TRADING
     // =========================================================================
@@ -963,7 +1888,8 @@ module.exports = (io) => {
 
       if (!text || typeof text !== 'string') return ackError(ack, 'text is required');
 
-      const cleaned = text.trim().slice(0, 300);   // max 300 chars
+      const isVoice = text.trim().startsWith('data:audio/');
+      const cleaned = text.trim().slice(0, isVoice ? 150000 : 300);
       if (!cleaned) return ackError(ack, 'Message cannot be empty');
 
       const message = {
@@ -982,6 +1908,8 @@ module.exports = (io) => {
 
       // Broadcast to everyone in the room (including sender)
       io.to(room.code).emit('receive-message', envelope(true, { message }));
+
+      saveRoom(room);
 
       ackOk(ack, { message });
     });
@@ -1023,7 +1951,7 @@ module.exports = (io) => {
 
     // ── kick-player ───────────────────────────────────────────────────────────
     /**
-     * Host only. Lobby only.
+     * Host only. Lobby or Playing.
      * Client payload: { playerId: string }
      */
     socket.on('kick-player', ({ playerId } = {}, ack) => {
@@ -1031,13 +1959,29 @@ module.exports = (io) => {
       if (!gr.ok) return ackError(ack, gr.error);
       const { room } = gr;
 
-      if (room.hostId !== socket.id) return ackError(ack, 'Only the host can kick players');
-      if (room.status !== 'lobby')   return ackError(ack, 'Cannot kick once game has started');
+      const player = findPlayerBySocket(room, socket.id);
+      if (!player || room.hostId !== player.id) return ackError(ack, 'Only the host can kick players');
+      if (room.status !== 'lobby' && room.status !== 'playing') {
+        return ackError(ack, 'Cannot kick player in this room status');
+      }
       if (!playerId)                 return ackError(ack, 'playerId is required');
       if (playerId === room.hostId)  return ackError(ack, 'Host cannot kick themselves');
 
       const target = findPlayerById(room, playerId);
       if (!target) return ackError(ack, 'Player not found');
+
+      // If game is in progress, declare them bankrupt to Bank to return all properties to market
+      if (room.status === 'playing') {
+        if (room.gameState && room.gameState.players[playerId] && !room.gameState.players[playerId].isBankrupt) {
+          const result = declareBankruptcy(room.gameState, playerId);
+          if (result.ok) {
+            broadcastEvents(io, room, result.events);
+            broadcastGameState(io, room);
+            startAfkTimer(io, room);
+            triggerBotCycle(io, room);
+          }
+        }
+      }
 
       // Remove from room
       room.players = room.players.filter((p) => p.id !== playerId);
@@ -1050,12 +1994,14 @@ module.exports = (io) => {
       const targetSocket = io.sockets.sockets.get(target.socketId);
       if (targetSocket) targetSocket.leave(room.code);
 
-      // Broadcast updated lobby
+      // Broadcast updated lobby / room players
       io.to(room.code).emit('player-left', envelope(true, {
         playerId,
+        username: target.username,
         room: lobbySnapshot(room),
       }));
 
+      saveRoom(room);
       ackOk(ack, {});
     });
 
@@ -1100,6 +2046,18 @@ module.exports = (io) => {
     socketToRoom.delete(socket.id);
     socket.leave(room.code);
 
+    if (player.isSpectator) {
+      room.spectators = (room.spectators || []).filter((p) => p.id !== player.id);
+      console.log(`[room] spectator ${player.username} left room ${room.code}`);
+      io.to(room.code).emit('player-left', envelope(true, {
+        playerId: player.id,
+        username: player.username,
+        room:     lobbySnapshot(room),
+      }));
+      saveRoom(room);
+      return;
+    }
+
     // ── LOBBY: just remove them ─────────────────────────────────────────────
     if (room.status === 'lobby') {
       room.players = room.players.filter((p) => p.socketId !== socket.id);
@@ -1111,9 +2069,12 @@ module.exports = (io) => {
       }
 
       // If host left, reassign host to next player
-      if (room.hostId === socket.id && room.players.length > 0) {
-        room.hostId = room.players[0].socketId;
-        console.log(`[room] host left ${room.code}; new host: ${room.players[0].username}`);
+      if (room.hostId === player.id) {
+        const nextHost = room.players.find((p) => !p.isBot);
+        if (nextHost) {
+          room.hostId = nextHost.id;
+          console.log(`[room] host left ${room.code}; new host: ${nextHost.username}`);
+        }
       }
 
       io.to(room.code).emit('player-left', envelope(true, {
@@ -1121,6 +2082,7 @@ module.exports = (io) => {
         username: player.username,
         room:     lobbySnapshot(room),
       }));
+      saveRoom(room);
       return;
     }
 
@@ -1130,6 +2092,27 @@ module.exports = (io) => {
       // Voluntary leave during a game: treat as bankruptcy forfeit
       player.connected = false;
       player.disconnectedAt = Date.now();
+
+      // If host left, reassign host role to next human player
+      if (room.hostId === player.id) {
+        const nextHost = room.players.find((p) => p.id !== player.id && !p.isBot && p.connected)
+                      || room.players.find((p) => p.id !== player.id && !p.isBot);
+        if (nextHost) {
+          room.hostId = nextHost.id;
+          console.log(`[room] Host left game room ${room.code}; reassigned host role to ${nextHost.username}`);
+        }
+      }
+
+      // Trigger engine bankruptcy to Bank to return all properties to market
+      if (room.gameState && room.gameState.players[player.id] && !room.gameState.players[player.id].isBankrupt) {
+        const result = declareBankruptcy(room.gameState, player.id);
+        if (result.ok) {
+          broadcastEvents(io, room, result.events);
+          broadcastGameState(io, room);
+          startAfkTimer(io, room);
+          triggerBotCycle(io, room);
+        }
+      }
 
       io.to(room.code).emit('player-left', envelope(true, {
         playerId: player.id,
@@ -1144,6 +2127,7 @@ module.exports = (io) => {
       if (activePlayers.length <= 1) {
         _endGameByDefault(io, room);
       }
+      saveRoom(room);
     } else {
       // Unintentional disconnect: grace period
       player.connected      = false;
@@ -1160,6 +2144,7 @@ module.exports = (io) => {
       }));
 
       console.log(`[room] ${player.username} disconnected from ${room.code}; grace ${RECONNECT_GRACE_MS}ms`);
+      saveRoom(room);
 
       // Start grace timer
       player._graceTimer = setTimeout(() => {
@@ -1178,6 +2163,7 @@ module.exports = (io) => {
         }));
 
         console.log(`[room] ${player.username} removed from ${room.code} after grace timeout`);
+        saveRoom(room);
 
         // Check end condition
         const remaining = room.players.filter(
@@ -1202,6 +2188,17 @@ module.exports = (io) => {
 
     room.status = 'finished';
 
+    if (room.gameState) {
+      room.gameState.status = 'finished';
+      room.gameState.winnerId = winner ? winner.id : null;
+      room.gameState.winnerName = winner ? winner.username : null;
+    }
+
+    if (!room.matchSaved) {
+      room.matchSaved = true;
+      _recordCompletedMatch(room);
+    }
+
     io.to(room.code).emit('game-over', envelope(true, {
       reason:   'players-left',
       winnerId: winner ? winner.id : null,
@@ -1214,4 +2211,10 @@ module.exports = (io) => {
     setTimeout(() => destroyRoom(io, room), 30_000);
   };
 
+};
+
+module.exports = {
+  mountGameSocket,
+  rooms,
+  destroyRoom
 };

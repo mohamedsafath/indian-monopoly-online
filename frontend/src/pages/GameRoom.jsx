@@ -20,6 +20,7 @@ import socketService                                  from '@/services/socketSer
 import ConnectionStatus                               from '@/components/GameHUD/ConnectionStatus';
 import EndGameModal                                    from '@/components/EndGameModal';
 import BankruptcyModal                                 from '@/components/BankruptcyModal';
+import RuleBookModal                                   from '@/components/RuleBookModal';
 
 import { MonopolyBoard }      from '@/components/Board/MonopolyBoard';
 import { useDiceAnimation }   from '@/hooks/useDiceAnimation';
@@ -27,10 +28,10 @@ import { useTokenMovement }   from '@/hooks/useTokenMovement';
 import { useBoardAnimation }  from '@/hooks/useBoardAnimation';
 import { delay }              from '@/utils/animationHelpers';
 import { BOARD_TILES, TILE_BY_ID, COLOR_GROUP_META } from '@/utils/boardTiles';
+import { PLAYER_TOKENS }      from '@/utils/boardLayout';
 
 // ─────────────────────────────────────────────────────────────────────────────
 const stored = (k) => sessionStorage.getItem(k) ?? '';
-const TOKENS  = ['🚗', '🐘', '🚆', '👑', '🛺', '🐅', '⚓', '🎯'];
 
 const hasMonopoly = (properties, playerId, tileId) => {
   const tile = TILE_BY_ID[tileId];
@@ -40,11 +41,11 @@ const hasMonopoly = (properties, playerId, tileId) => {
 };
 
 const countRailwaysOwned = (properties, playerId) => {
-  return BOARD_TILES.filter(t => t.type === 'railway' && properties[t.id]?.ownerId === playerId).length;
+  return BOARD_TILES.filter(t => t.type === 'railway' && properties[t.id]?.ownerId === playerId && !properties[t.id]?.mortgaged).length;
 };
 
 const countUtilitiesOwned = (properties, playerId) => {
-  return BOARD_TILES.filter(t => t.type === 'utility' && properties[t.id]?.ownerId === playerId).length;
+  return BOARD_TILES.filter(t => t.type === 'utility' && properties[t.id]?.ownerId === playerId && !properties[t.id]?.mortgaged).length;
 };
 
 const calculateRent = (properties, players, tileId, landingPlayerId, diceTotal = 7) => {
@@ -92,8 +93,10 @@ const tileName = (pos) => TILE_NAMES[pos] ?? `Tile ${pos}`;
 // SUB-COMPONENTS
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PlayerCard({ player, index, isCurrentTurn, isMe }) {
+function PlayerCard({ player, index, isCurrentTurn, isMe, isViewerSpectator = false }) {
   const ownedCount = player.ownedProperties?.length ?? 0;
+  const token = player.token || PLAYER_TOKENS[index % PLAYER_TOKENS.length];
+  const showMoney = isMe || isViewerSpectator;
   return (
     <div
       className="flex items-start gap-2 px-2.5 py-2.5 rounded-xl transition-all duration-300"
@@ -105,7 +108,7 @@ function PlayerCard({ player, index, isCurrentTurn, isMe }) {
     >
       <span className="text-lg flex-shrink-0 mt-0.5"
         style={{ filter: isCurrentTurn ? 'drop-shadow(0 0 6px rgba(34,197,94,0.9))' : 'none' }}>
-        {TOKENS[index % TOKENS.length]}
+        {token}
       </span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 mb-0.5">
@@ -124,10 +127,12 @@ function PlayerCard({ player, index, isCurrentTurn, isMe }) {
             <span style={{ fontSize:'0.55rem', color:'#f59e0b' }}>⚠</span>
           )}
         </div>
-        <p className="text-xs font-bold mb-1"
-          style={{ color: isCurrentTurn ? 'rgba(74,222,128,0.8)' : 'rgba(212,175,55,0.7)', fontFamily:"'DM Sans',sans-serif" }}>
-          ₹{Number(player.money ?? 0).toLocaleString('en-IN')}
-        </p>
+        {showMoney && (
+          <p className="text-xs font-bold mb-1"
+            style={{ color: isCurrentTurn ? 'rgba(74,222,128,0.8)' : 'rgba(212,175,55,0.7)', fontFamily:"'DM Sans',sans-serif" }}>
+            ₹{Number(player.money ?? 0).toLocaleString('en-IN')}
+          </p>
+        )}
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs" style={{ color:'rgba(156,163,175,0.5)', fontFamily:"'DM Sans',sans-serif" }}>
             📍 {tileName(player.position ?? 0)}
@@ -192,6 +197,94 @@ function Toast({ message, type = 'error', onClose }) {
   );
 }
 
+const QUICK_EMOJIS = ['🎲', '🏠', '💰', '💸', '🔒', '🤝', '☠️', '🎉', '🔥', '👏'];
+
+// A function that parses text and replaces @Username with high-end gold badge
+const formatMentions = (text, players = []) => {
+  if (!text) return '';
+  
+  const tokens = text.split(/(\s+)/);
+  return tokens.map((token, idx) => {
+    if (token.startsWith('@')) {
+      const candidate = token.slice(1);
+      // Clean candidate of ending punctuation
+      const cleanCandidate = candidate.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"");
+      const matchedPlayer = players.find(p => p.username.toLowerCase() === cleanCandidate.toLowerCase());
+      
+      if (matchedPlayer) {
+        const punctuation = candidate.slice(cleanCandidate.length);
+        return (
+          <span key={idx} className="inline-block px-1.5 py-0.5 rounded text-[11px] font-bold tracking-wide select-all animate-fade-in"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(212,175,55,0.2) 0%, rgba(245,158,11,0.1) 100%)',
+                  color: '#fde68a',
+                  border: '1.5px solid rgba(212,175,55,0.45)',
+                  textShadow: '0 0 4px rgba(245,158,11,0.3)',
+                  margin: '0 2px'
+                }}>
+            @{cleanCandidate}
+            {punctuation}
+          </span>
+        );
+      }
+    }
+    return token;
+  });
+};
+
+// ── Chat bubble ───────────────────────────────────────────────────────────────
+function ChatBubble({ msg, isMe, players = [] }) {
+  if (msg.playerId === 'system' || msg.isSystem) {
+    return (
+      <div className="w-full my-1 flex justify-center animate-fade-in">
+        <div className="px-4 py-2 rounded-xl text-xs text-center border border-dashed"
+             style={{
+               background: 'linear-gradient(135deg, rgba(212,175,55,0.06) 0%, rgba(245,158,11,0.02) 100%)',
+               borderColor: 'rgba(212,175,55,0.25)',
+               color: '#fde68a',
+               maxWidth: '92%',
+               fontFamily: "'DM Sans', sans-serif",
+               boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+               lineHeight: '1.4'
+             }}>
+          {msg.text}
+        </div>
+      </div>
+    );
+  }
+
+  const isAudio = msg.text && msg.text.startsWith('data:audio/');
+  return (
+    <div className={`flex flex-col gap-0.5 ${isMe ? 'items-end' : 'items-start'} animate-fade-in`}>
+      <span className="text-[10px]" style={{ color:'rgba(156,163,175,0.55)',
+                                          fontFamily:"'DM Sans',sans-serif" }}>
+        {msg.username}
+      </span>
+      {isAudio ? (
+        <div className="rounded-xl overflow-hidden"
+             style={{
+               background: isMe ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.04)',
+               border: isMe ? '1px solid rgba(245,158,11,0.25)' : '1px solid rgba(255,255,255,0.08)',
+               padding: '6px 10px',
+               width: '100%',
+               maxWidth: 200,
+             }}>
+          <audio src={msg.text} controls style={{ width: '100%', height: 28, filter: 'invert(1) hue-rotate(180deg)' }} />
+        </div>
+      ) : (
+        <div className="text-xs px-2.5 py-1.5 rounded-xl max-w-[85%] break-words"
+             style={{ background: isMe ? 'rgba(245,158,11,0.1)' : 'rgba(255,255,255,0.04)',
+                      color: isMe ? '#fde68a' : '#d1d5db',
+                      border: isMe ? '1px solid rgba(245,158,11,0.15)' : '1px solid rgba(255,255,255,0.06)',
+                      fontFamily:"'DM Sans',sans-serif",
+                      lineHeight: '1.4' }}>
+          {formatMentions(msg.text, players)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN PAGE
 // ─────────────────────────────────────────────────────────────────────────────
@@ -199,23 +292,123 @@ function Toast({ message, type = 'error', onClose }) {
 export default function GameRoom() {
   const { roomCode } = useParams();
   const navigate     = useNavigate();
-  const myId         = stored('mi_playerId');
+  // Resolve playerId from localStorage if not in sessionStorage (e.g. copied direct link)
+  let resolvedId = stored('mi_playerId');
+  if (!resolvedId) {
+    try {
+      const storedUser = localStorage.getItem('mi_google_user');
+      if (storedUser) {
+        const parsed = JSON.parse(storedUser);
+        if (parsed?.playerId) {
+          resolvedId = parsed.playerId;
+          sessionStorage.setItem('mi_playerId', resolvedId);
+          sessionStorage.setItem('mi_username', parsed.username || '');
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  const myId         = resolvedId;
 
   const [gameState,     setGameState]     = useState(null);
+  const [room,          setRoom]          = useState(null);
   const [chatMessages,  setChatMessages]  = useState([]);
   const [chatInput,     setChatInput]     = useState('');
   const [events,        setEvents]        = useState([]);
   const [loading,       setLoading]       = useState(true);
   const [toast,         setToast]         = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
+  const [systemAlert,  setSystemAlert]   = useState('');
   
   const [showEndGameModal, setShowEndGameModal] = useState(false);
+  const [showPlayersModal, setShowPlayersModal] = useState(false);
   const [showBankruptcyModal, setShowBankruptcyModal] = useState(false);
   const [hasDismissedBankruptcy, setHasDismissedBankruptcy] = useState(false);
   
   const [showTradeModal, setShowTradeModal] = useState(false);
   const [showBuildPanel, setShowBuildPanel] = useState(false);
   const [showLoanModal, setShowLoanModal] = useState(false);
+  const [showRuleBook, setShowRuleBook] = useState(false);
+  const [activeTab,     setActiveTab]     = useState('lobby'); // 'lobby' | 'chat' | 'properties'
+  
+  // Advanced Chat states
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showMentionsDropdown, setShowMentionsDropdown] = useState(false);
+  const [mentionSearch, setMentionSearch] = useState('');
+
+  // Audio recording states
+  const [isRecording, setIsRecording] = useState(false);
+  const [recDuration, setRecDuration] = useState(0);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const timerRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        stream.getTracks().forEach((track) => track.stop());
+
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const base64Data = reader.result;
+          try {
+            await socketService.sendMessage(base64Data);
+          } catch (err) {
+            console.error('Failed to send voice message:', err);
+          }
+        };
+        reader.readAsDataURL(audioBlob);
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecDuration(0);
+
+      timerRef.current = setInterval(() => {
+        setRecDuration((prev) => {
+          if (prev >= 12) {
+            clearInterval(timerRef.current);
+            mediaRecorder.stop();
+            setIsRecording(false);
+            return 12;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+
+    } catch (err) {
+      console.error('Failed to access microphone:', err);
+      alert('Could not access microphone. Please verify browser permissions.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      clearInterval(timerRef.current);
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
 
   const chatEndRef  = useRef(null);
   const eventEndRef = useRef(null);
@@ -268,12 +461,56 @@ export default function GameRoom() {
           socket.connect();
           await new Promise(res => socket.once('connect', res));
         }
+        // If spectate parameter is present, bypass player checks and join directly as spectator
+        const isForceSpectate = new URLSearchParams(window.location.search).get('spectate') === 'true';
+        if (isForceSpectate) {
+          const storedUserStr = localStorage.getItem('mi_google_user');
+          const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
+          const username = storedUser?.username || `Guest_${Math.floor(1000 + Math.random() * 9000)}`;
+
+          try {
+            const data = await socketService.joinRoom(roomCode, username, myId, true);
+            sessionStorage.setItem('mi_isSpectator', 'true');
+            if (data.room) setRoom(data.room);
+            const stateData = await socketService.getRoomState();
+            if (stateData.room) setRoom(stateData.room);
+            if (stateData.gameState) setGameState(stateData.gameState);
+            
+            try {
+              const hist = await socketService.getChatHistory();
+              setChatMessages(hist.messages || []);
+            } catch { /* no history */ }
+            return;
+          } catch (specErr) {
+            console.error('[GameRoom] Spectate error:', specErr);
+            showToast(specErr.message || 'Could not join as spectator', 'error');
+            return;
+          }
+        }
+
         try {
           const data = await socketService.reconnectRoom(roomCode, myId);
+          sessionStorage.setItem('mi_isSpectator', data.isSpectator ? 'true' : 'false');
+          if (data.room) setRoom(data.room);
           if (data.gameState) setGameState(data.gameState);
         } catch {
-          const data = await socketService.getRoomState();
-          if (data.gameState) setGameState(data.gameState);
+          // Player is not in the room yet (copied link join / fresh tab session during play)
+          // Since the game is already in progress, join them automatically as a spectator
+          const storedUserStr = localStorage.getItem('mi_google_user');
+          const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
+          const username = storedUser?.username || `Guest_${Math.floor(1000 + Math.random() * 9000)}`;
+
+          try {
+            const data = await socketService.joinRoom(roomCode, username, myId, true);
+            sessionStorage.setItem('mi_isSpectator', 'true');
+            if (data.room) setRoom(data.room);
+            // Request room state to fetch gameState
+            const stateData = await socketService.getRoomState();
+            if (stateData.room) setRoom(stateData.room);
+            if (stateData.gameState) setGameState(stateData.gameState);
+          } catch (joinErr) {
+            throw joinErr;
+          }
         }
         try {
           const hist = await socketService.getChatHistory();
@@ -315,6 +552,47 @@ export default function GameRoom() {
       resolve();
     }
   }, [boardAnimation]);
+
+  const handleKickPlayerInGame = useCallback(async (playerId) => {
+    const pInRoom = room?.players?.find(p => p.id === playerId);
+    const pInState = gameState?.players?.[playerId];
+    const isBot = pInRoom?.isBot || pInState?.isBot || pInState?.username?.includes('Bot') || pInState?.username?.includes('🤖') || false;
+    
+    // Only show confirmation dialog for human players
+    if (!isBot) {
+      if (!window.confirm('Are you sure you want to kick this player out of the game? All their properties will go back to the market for sale.')) {
+        return;
+      }
+    }
+    try {
+      await socketService.kickPlayer(playerId);
+      showToast('Kicked player from match', 'success');
+    } catch (err) {
+      showToast(err.message || 'Failed to kick player', 'error');
+    }
+  }, [room, gameState, showToast]);
+
+  const handleVoteKickHostInitiate = useCallback(async () => {
+    if (!window.confirm('Are you sure you want to initiate a vote to kick the host out of the game? All their properties will go back to the market for sale.')) {
+      return;
+    }
+    try {
+      await socketService.requestKickHost();
+      showToast('Initiated vote to kick host', 'success');
+      setShowPlayersModal(false);
+    } catch (err) {
+      showToast(err.message || 'Failed to initiate kick vote', 'error');
+    }
+  }, [showToast]);
+
+  const handleVoteKickHostCast = useCallback(async (accept) => {
+    try {
+      await socketService.voteKickHost(accept);
+      showToast(accept ? 'Voted to kick host' : 'Voted to keep host', 'success');
+    } catch (err) {
+      showToast(err.message || 'Failed to submit vote', 'error');
+    }
+  }, [showToast]);
 
   const handleDeckClick = useCallback((deckType) => {
     const pendingCardDraw = boardAnimation.pendingCardDraw;
@@ -370,9 +648,9 @@ export default function GameRoom() {
 
         // ── PLAYER MOVED (DICE or CARD) ──
         case 'PLAYER_MOVED': {
-          const { playerId, from, to, teleport } = event.payload;
+          const { playerId, from, to, teleport, moveBack } = event.payload;
           // Animate the player's token step-by-step or teleport instantly
-          await animateMovement(playerId, from, to, teleport);
+          await animateMovement(playerId, from, to, teleport, moveBack);
           if (event.message) {
             pushFeedEvent(event.message, event.type === 'system' ? '⚡' : '🔔');
           }
@@ -519,6 +797,26 @@ export default function GameRoom() {
           break;
         }
 
+        // ── BANK REPOSSESSION ──
+        case 'BANK_REPOSSESSION': {
+          const { tileId } = event.payload;
+          const tile = TILE_BY_ID[tileId];
+          boardAnimation.flashProperty(tileId);
+          boardAnimation.showToast({ type: 'repossession', tileId, tileName: tile?.name });
+          await delay(2500);
+          break;
+        }
+
+        // ── PROPERTY MORTGAGED ──
+        case 'PROPERTY_MORTGAGED': {
+          const { tileId, amount } = event.payload;
+          const tile = TILE_BY_ID[tileId];
+          boardAnimation.flashProperty(tileId);
+          boardAnimation.showToast({ type: 'mortgage', tileId, tileName: tile?.name, amount });
+          await delay(2000);
+          break;
+        }
+
         default:
           break;
       }
@@ -593,7 +891,9 @@ export default function GameRoom() {
       runSequencer();
     };
 
-    const onRoomUpdated       = () => {};
+    const onRoomUpdated       = ({ data }) => {
+      if (data?.room) setRoom(data.room);
+    };
     const onPlayerDisconnected = ({ data }) => {
       if (!data) return;
       pushFeedEvent(`${data.username} disconnected`, '⚡');
@@ -612,6 +912,19 @@ export default function GameRoom() {
       pushFeedEvent(`Game Over! ${winner} wins! 🏆`, '🎉');
       setTimeout(() => { alert(`🏆 ${winner} wins Monopoly India!`); navigate('/'); }, 800);
     };
+    const onKicked            = () => {
+      sessionStorage.clear();
+      navigate('/');
+    };
+    const onRoomDestroyed     = () => {
+      sessionStorage.clear();
+      navigate('/');
+    };
+    const onSystemAlert       = (data) => {
+      if (data && data.message) {
+        setSystemAlert(data.message);
+      }
+    };
 
     const onLoanApproved = ({ ok, data, error }) => {
       showToast('Emergency loan approved by Madras Banking Corp!', 'success');
@@ -626,6 +939,24 @@ export default function GameRoom() {
       showToast('💰 Loan repaid in full. Credit line cleared!', 'success');
     };
 
+    const onConnect = () => {
+      console.log('[GameRoom] Socket connected/reconnected, restoring match state...');
+      socketService.reconnectRoom(roomCode, myId)
+        .then((data) => {
+          sessionStorage.setItem('mi_isSpectator', data.isSpectator ? 'true' : 'false');
+          if (data.room) setRoom(data.room);
+          if (data.gameState) {
+            setGameState(data.gameState);
+            showToast('Connection restored successfully!', 'success');
+          }
+        })
+        .catch((err) => {
+          console.error('[GameRoom] Reconnection failed:', err.message);
+          showToast('Attempting to reconnect...', 'warning');
+        });
+    };
+
+    socket.on('connect',            onConnect);
     socket.on('game-updated',        onGameUpdated);
     socket.on('game-events',         onGameEvents);
     socket.on('room-updated',        onRoomUpdated);
@@ -633,11 +964,15 @@ export default function GameRoom() {
     socket.on('player-reconnected',  onPlayerReconnected);
     socket.on('receive-message',     onReceiveMessage);
     socket.on('game-over',           onGameOver);
+    socket.on('kicked',              onKicked);
+    socket.on('room-destroyed',     onRoomDestroyed);
+    socket.on('system-alert',       onSystemAlert);
     socket.on('loan-approved',       onLoanApproved);
     socket.on('loan-rejected',       onLoanRejected);
     socket.on('loan-repayment-due',  onLoanRepaymentDue);
     socket.on('loan-repaid',         onLoanRepaid);
     return () => {
+      socket.off('connect',            onConnect);
       socket.off('game-updated',        onGameUpdated);
       socket.off('game-events',         onGameEvents);
       socket.off('room-updated',        onRoomUpdated);
@@ -645,12 +980,15 @@ export default function GameRoom() {
       socket.off('player-reconnected',  onPlayerReconnected);
       socket.off('receive-message',     onReceiveMessage);
       socket.off('game-over',           onGameOver);
+      socket.off('kicked',              onKicked);
+      socket.off('room-destroyed',     onRoomDestroyed);
+      socket.off('system-alert',       onSystemAlert);
       socket.off('loan-approved',       onLoanApproved);
       socket.off('loan-rejected',       onLoanRejected);
       socket.off('loan-repayment-due',  onLoanRepaymentDue);
       socket.off('loan-repaid',         onLoanRepaid);
     };
-  }, [navigate, pushFeedEvent, showToast, runSequencer]);
+  }, [navigate, pushFeedEvent, showToast, runSequencer, roomCode, myId]);
 
 
   // ── Action wrapper ─────────────────────────────────────────────────────────
@@ -717,8 +1055,32 @@ export default function GameRoom() {
 
   // ── Derived state ──────────────────────────────────────────────────────────
   const players         = gameState ? Object.values(gameState.players) : [];
+  const filteredPlayers = players.filter(p =>
+    p.id !== myId &&
+    p.username.toLowerCase().includes(mentionSearch.toLowerCase())
+  );
+
+  const handleChatInputChange = (val) => {
+    setChatInput(val);
+    const lastWord = val.split(' ').pop();
+    if (lastWord.startsWith('@')) {
+      setMentionSearch(lastWord.slice(1));
+      setShowMentionsDropdown(true);
+    } else {
+      setShowMentionsDropdown(false);
+    }
+  };
+
+  const selectMention = (p) => {
+    const words = chatInput.split(' ');
+    words.pop();
+    words.push(`@${p.username} `);
+    setChatInput(words.join(' '));
+    setShowMentionsDropdown(false);
+  };
   const currentPlayerId = gameState?.currentPlayerId;
   const isMyTurn        = currentPlayerId === myId;
+  const isHost          = room?.hostId === myId;
   const me              = gameState?.players?.[myId];
   const hasRolled       = gameState?.hasRolled ?? false;
   const canRoll         = isMyTurn && !hasRolled && !me?.isBankrupt;
@@ -756,12 +1118,44 @@ export default function GameRoom() {
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen flex flex-col overflow-hidden"
-      style={{ background:'#080604', fontFamily:"'DM Sans',sans-serif", color:'#f3f4f6' }}>
+    <div className="h-screen h-[100dvh] flex flex-col overflow-hidden"
+      style={{ background:'#080604', fontFamily:"'DM Sans',sans-serif", color:'#f3f4f6', height: '100vh', maxHeight: '100vh' }}>
+
+      {systemAlert && (
+        <div className="w-full py-2 px-4 text-center text-[10px] font-black uppercase tracking-widest relative z-50 flex items-center justify-center gap-1.5 transition-all duration-300 flex-shrink-0"
+             style={{
+               background: 'linear-gradient(90deg, #b45309 0%, #d97706 50%, #b45309 100%)',
+               borderBottom: '1px solid #fde68a',
+               color: '#fde68a',
+               boxShadow: '0 4px 12px rgba(217,119,6,0.35)',
+               textShadow: '0 1px 1px rgba(0,0,0,0.6)'
+             }}>
+          <span>📢 SYSTEM ALERT: {systemAlert}</span>
+          <button 
+            onClick={() => setSystemAlert('')}
+            className="ml-2.5 hover:scale-110 active:scale-95 transition-all text-[10px] font-black cursor-pointer text-amber-100 hover:text-white bg-black/10 hover:bg-black/20 w-4.5 h-4.5 rounded-full flex items-center justify-center"
+            title="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,700&family=DM+Sans:wght@400;500;600;700;800;900&display=swap');
         ::-webkit-scrollbar { width: 3px }
         ::-webkit-scrollbar-thumb { background: rgba(212,175,55,0.18); border-radius: 4px }
+        
+        :root {
+          --board-height: min(100vw - 16px, 52vh);
+          --board-width: min(100vw - 16px, 52vh);
+        }
+        
+        @media (min-width: 1024px) {
+          :root {
+            --board-width: min(100vw - 580px, 100vh - 65px);
+            --board-height: min(100vw - 580px, 100vh - 65px);
+          }
+        }
       `}</style>
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={dismissToast} />}
@@ -786,6 +1180,46 @@ export default function GameRoom() {
               🔨 Auction
             </span>
           )}
+          <button
+            onClick={() => setShowRuleBook(true)}
+            className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+            style={{
+              background: 'rgba(212,175,55,0.08)',
+              color: '#f59e0b',
+              border: '1px solid rgba(212,175,55,0.25)',
+              fontFamily: "'DM Sans', sans-serif",
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'rgba(212,175,55,0.14)';
+              e.currentTarget.style.borderColor = 'rgba(212,175,55,0.6)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'rgba(212,175,55,0.08)';
+              e.currentTarget.style.borderColor = 'rgba(212,175,55,0.25)';
+            }}
+          >
+            📜 Rules
+          </button>
+          <button
+            onClick={() => setShowPlayersModal(true)}
+            className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+            style={{
+              background: 'rgba(212,175,55,0.08)',
+              color: '#f59e0b',
+              border: '1px solid rgba(212,175,55,0.25)',
+              fontFamily: "'DM Sans', sans-serif",
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'rgba(212,175,55,0.14)';
+              e.currentTarget.style.borderColor = 'rgba(212,175,55,0.6)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'rgba(212,175,55,0.08)';
+              e.currentTarget.style.borderColor = 'rgba(212,175,55,0.25)';
+            }}
+          >
+            👥 Players
+          </button>
           <ConnectionStatus />
           {gameState?.status === 'playing' && (
             <button
@@ -807,15 +1241,56 @@ export default function GameRoom() {
               🛑 End Game
             </button>
           )}
-          <span className="text-xs" style={{ color:'rgba(156,163,175,0.4)' }}>{roomCode}</span>
+          <button
+            onClick={async () => {
+              const lobbyLink = `${window.location.origin}/lobby/${roomCode}`;
+              try {
+                await navigator.clipboard.writeText(lobbyLink);
+                showToast?.('Lobby invite link copied to clipboard!', 'success');
+              } catch {
+                const el = document.createElement('textarea');
+                el.value = lobbyLink;
+                document.body.appendChild(el);
+                el.select();
+                document.execCommand('copy');
+                document.body.removeChild(el);
+                showToast?.('Lobby invite link copied to clipboard!', 'success');
+              }
+            }}
+            onCopy={(e) => {
+              e.preventDefault();
+              e.clipboardData.setData('text/plain', `${window.location.origin}/lobby/${roomCode}`);
+              showToast?.('Lobby invite link copied to clipboard!', 'success');
+            }}
+            title="Click or copy to get lobby invite link"
+            className="text-[11px] font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg border hover:text-yellow-400 select-all"
+            style={{
+              background: 'rgba(255,255,255,0.03)',
+              borderColor: 'rgba(255,255,255,0.08)',
+              color: 'rgba(156,163,175,0.7)',
+              fontFamily: "'DM Sans', sans-serif"
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'rgba(212,175,55,0.08)';
+              e.currentTarget.style.borderColor = 'rgba(212,175,55,0.3)';
+              e.currentTarget.style.color = '#f59e0b';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
+              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
+              e.currentTarget.style.color = 'rgba(156,163,175,0.7)';
+            }}
+          >
+            🔗 {roomCode}
+          </button>
         </div>
       </header>
 
       {/* Body */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-col lg:flex-row flex-1 overflow-y-auto lg:overflow-hidden">
 
         {/* Left sidebar */}
-        <aside className="w-60 flex flex-col gap-0 flex-shrink-0 overflow-hidden"
+        <aside className="hidden lg:flex w-60 flex-col gap-0 flex-shrink-0 overflow-hidden"
           style={{ borderRight:'1px solid rgba(255,255,255,0.05)' }}>
           <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3">
 
@@ -826,7 +1301,8 @@ export default function GameRoom() {
               ? <p className="text-xs" style={{ color:'rgba(156,163,175,0.3)' }}>No players found</p>
               : players.map((p, i) => (
                 <PlayerCard key={p.id} player={p} index={i}
-                  isCurrentTurn={p.id === currentPlayerId} isMe={p.id === myId} />
+                  isCurrentTurn={p.id === currentPlayerId} isMe={p.id === myId}
+                  isViewerSpectator={sessionStorage.getItem('mi_isSpectator') === 'true'} />
               ))
             }
 
@@ -902,7 +1378,8 @@ export default function GameRoom() {
         </aside>
 
         {/* Board */}
-        <main className="flex-1 overflow-hidden" style={{ position:'relative', minWidth:0 }}>
+        <main className="w-full lg:flex-1 flex-shrink-0 flex items-center justify-center p-2 lg:py-2 lg:px-4 lg:overflow-hidden mx-auto" 
+              style={{ position:'relative', minWidth:0, width: 'var(--board-width, 100%)', height: 'var(--board-height, auto)' }}>
           <MonopolyBoard
             gameState={gameState}
             myId={myId}
@@ -962,7 +1439,7 @@ export default function GameRoom() {
         </main>
 
         {/* Right: Chat & My Properties */}
-        <aside className="flex flex-col flex-shrink-0"
+        <aside className="hidden lg:flex flex-col flex-shrink-0"
           style={{ width: '280px', borderLeft:'1px solid rgba(255,255,255,0.05)', height: '100%' }}>
           
           {/* Chat Container */}
@@ -976,42 +1453,114 @@ export default function GameRoom() {
             <div className="flex-1 overflow-y-auto flex flex-col gap-2 p-3">
               {chatMessages.length === 0
                 ? <p className="text-xs text-center mt-4" style={{ color:'rgba(156,163,175,0.25)' }}>No messages yet</p>
-                : chatMessages.map((msg) => {
-                    const isMe2 = msg.playerId === myId;
-                    return (
-                      <div key={msg.id} className={`flex flex-col gap-0.5 ${isMe2 ? 'items-end' : 'items-start'}`}>
-                        <span className="text-xs" style={{ color:'rgba(156,163,175,0.4)' }}>{msg.username}</span>
-                        <div className="text-xs px-2.5 py-1.5 rounded-xl max-w-full break-words"
-                          style={{
-                            background: isMe2 ? 'rgba(245,158,11,0.1)' : 'rgba(255,255,255,0.04)',
-                            color: isMe2 ? '#fde68a' : '#d1d5db',
-                            border: isMe2 ? '1px solid rgba(245,158,11,0.15)' : '1px solid rgba(255,255,255,0.06)',
-                          }}>
-                          {msg.text}
-                        </div>
-                      </div>
-                    );
-                  })
+                : chatMessages.map((msg) => (
+                    <ChatBubble key={msg.id} msg={msg} isMe={msg.playerId === myId} players={players} />
+                  ))
               }
               <div ref={chatEndRef} />
             </div>
 
-            <div className="p-3 flex gap-2 flex-shrink-0"
-              style={{ borderTop:'1px solid rgba(255,255,255,0.05)' }}>
-              <input
-                value={chatInput}
-                onChange={e => setChatInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') handleChat(); }}
-                placeholder="Message…"
-                maxLength={300}
-                className="flex-1 px-2.5 py-1.5 rounded-lg text-xs outline-none"
-                style={{ background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', color:'#f3f4f6', caretColor:'#f59e0b' }}
-              />
-              <button onClick={handleChat}
-                className="px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-all"
-                style={{ background:'rgba(245,158,11,0.1)', color:'#f59e0b', border:'1px solid rgba(245,158,11,0.18)' }}>
-                ↑
-              </button>
+            <div className="p-3 flex gap-2 flex-shrink-0 relative"
+              style={{ borderTop:'1px solid rgba(255,255,255,0.05)', alignItems: 'center', position: 'relative' }}>
+              {/* Mentions Suggestions Dropdown */}
+              {showMentionsDropdown && filteredPlayers.length > 0 && (
+                <div className="absolute bottom-12 left-0 right-0 p-1.5 rounded-xl flex flex-col gap-1 z-30 backdrop-blur-md animate-fade-in"
+                     style={{
+                       background: 'rgba(15,10,5,0.95)',
+                       border: '1.5px solid rgba(212,175,55,0.35)',
+                       boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+                       maxHeight: '140px',
+                       overflowY: 'auto'
+                     }}>
+                  {filteredPlayers.map(p => (
+                    <button
+                      key={p.id}
+                      onClick={() => selectMention(p)}
+                      className="w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-300 hover:bg-yellow-500/10 hover:text-yellow-500 transition-colors duration-150 cursor-pointer"
+                      style={{ fontFamily: "'DM Sans', sans-serif" }}
+                    >
+                      👤 @{p.username}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Emoji Reaction Drawer */}
+              {showEmojiPicker && (
+                <div className="absolute bottom-12 left-0 right-0 p-2 rounded-xl flex gap-2 justify-around z-20 backdrop-blur-md animate-fade-in"
+                     style={{
+                       background: 'rgba(15,10,5,0.95)',
+                       border: '1.5px solid rgba(212,175,55,0.3)',
+                       boxShadow: '0 8px 32px rgba(0,0,0,0.6)'
+                     }}>
+                  {QUICK_EMOJIS.map(emoji => (
+                    <button
+                      key={emoji}
+                      onClick={() => {
+                        setChatInput(prev => prev + emoji);
+                        setShowEmojiPicker(false);
+                      }}
+                      className="text-base hover:scale-125 transition-transform duration-150 cursor-pointer p-0.5"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {isRecording ? (
+                <div className="flex-grow flex items-center justify-between px-3 py-2 rounded-lg text-[10px] font-semibold"
+                     style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5', animation: 'recPulseGame 2s infinite ease-in-out' }}>
+                  <style>{`
+                    @keyframes recPulseGame {
+                      0%, 100% { border-color: rgba(239,68,68,0.3); background: rgba(239,68,68,0.08); }
+                      50% { border-color: rgba(239,68,68,0.6); background: rgba(239,68,68,0.16); }
+                    }
+                  `}</style>
+                  <span>🔴 Recording: 0:{recDuration.toString().padStart(2, '0')} / 0:12</span>
+                  <button onClick={stopRecording}
+                          className="px-2 py-0.5 rounded bg-red-600 hover:bg-red-700 text-white font-bold cursor-pointer text-[8px] uppercase tracking-wider transition-all">
+                    Stop ⏹️
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="relative flex-1 flex items-center min-w-0">
+                    <input
+                      value={chatInput}
+                      onChange={e => handleChatInputChange(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleChat(); }}
+                      placeholder="Type @name..."
+                      maxLength={300}
+                      className="w-full pl-3 pr-14 py-1.5 rounded-lg text-xs outline-none"
+                      style={{ background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', color:'#f3f4f6', caretColor:'#f59e0b' }}
+                    />
+                    <div className="absolute right-1 flex items-center gap-0.5">
+                      <button
+                        onClick={() => { setShowEmojiPicker(!showEmojiPicker); setShowMentionsDropdown(false); }}
+                        className="p-1 text-sm cursor-pointer hover:bg-white/10 rounded transition-all"
+                        style={{ border: 'none', background: 'transparent' }}
+                        title="Insert emoji"
+                      >
+                        😀
+                      </button>
+                      <button
+                        onClick={startRecording}
+                        className="p-1 text-sm cursor-pointer hover:bg-white/10 rounded transition-all"
+                        style={{ border: 'none', background: 'transparent' }}
+                        title="Record voice message"
+                      >
+                        🎙️
+                      </button>
+                    </div>
+                  </div>
+                  <button onClick={handleChat}
+                    className="px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-all flex-shrink-0"
+                    style={{ background:'rgba(245,158,11,0.1)', color:'#f59e0b', border:'1px solid rgba(245,158,11,0.18)' }}>
+                    ↑
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
@@ -1175,7 +1724,473 @@ export default function GameRoom() {
             )}
           </div>
         </aside>
+
+        {/* Mobile Tabbed Panels (only visible on mobile/tablet) */}
+        <div className="flex lg:hidden flex-col flex-1 p-3 gap-3 overflow-hidden" style={{ minHeight: '380px' }}>
+          {/* Tab Bar */}
+          <div className="flex gap-1 p-1 rounded-xl flex-shrink-0" style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(212,175,55,0.1)' }}>
+            <button
+              onClick={() => setActiveTab('lobby')}
+              className="flex-grow py-2 text-center rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer"
+              style={{
+                background: activeTab === 'lobby' ? 'rgba(212,175,55,0.12)' : 'transparent',
+                color: activeTab === 'lobby' ? '#f59e0b' : 'rgba(156,163,175,0.6)',
+                border: activeTab === 'lobby' ? '1px solid rgba(212,175,55,0.25)' : '1px solid transparent',
+              }}
+            >
+              🎮 Lobby & Play
+            </button>
+            <button
+              onClick={() => setActiveTab('chat')}
+              className="flex-grow py-2 text-center rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer"
+              style={{
+                background: activeTab === 'chat' ? 'rgba(212,175,55,0.12)' : 'transparent',
+                color: activeTab === 'chat' ? '#f59e0b' : 'rgba(156,163,175,0.6)',
+                border: activeTab === 'chat' ? '1px solid rgba(212,175,55,0.25)' : '1px solid transparent',
+              }}
+            >
+              💬 Chat
+            </button>
+            <button
+              onClick={() => setActiveTab('properties')}
+              className="flex-grow py-2 text-center rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer"
+              style={{
+                background: activeTab === 'properties' ? 'rgba(212,175,55,0.12)' : 'transparent',
+                color: activeTab === 'properties' ? '#f59e0b' : 'rgba(156,163,175,0.6)',
+                border: activeTab === 'properties' ? '1px solid rgba(212,175,55,0.25)' : '1px solid transparent',
+              }}
+            >
+              🏠 Properties
+            </button>
+          </div>
+
+          {/* Tab Content Area */}
+          <div className="flex-grow overflow-y-auto" style={{ maxHeight: '50vh', minHeight: '260px' }}>
+            {activeTab === 'lobby' && (
+              <div className="flex flex-col gap-4 p-1">
+                {/* Players cards */}
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: 'rgba(212,175,55,0.5)' }}>Players</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {players.map((p, i) => (
+                      <PlayerCard key={p.id} player={p} index={i} isCurrentTurn={p.id === currentPlayerId} isMe={p.id === myId}
+                        isViewerSpectator={sessionStorage.getItem('mi_isSpectator') === 'true'} />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Primary Actions */}
+                {sessionStorage.getItem('mi_isSpectator') === 'true' ? (
+                  <div className="p-4 rounded-xl text-center border border-dashed border-yellow-500/20 bg-yellow-500/5 flex flex-col items-center justify-center gap-1">
+                    <span className="text-xl">👁️</span>
+                    <p className="text-xs font-bold text-yellow-500 uppercase tracking-widest mt-1">Spectating Match</p>
+                    <p className="text-[10px] text-gray-500 mt-0.5 leading-normal max-w-xs">You are watching the live board. Chat with the landlords and enjoy the game!</p>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-xl flex flex-col gap-2" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <h3 className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: 'rgba(212,175,55,0.5)' }}>
+                      {isMyTurn ? '⚡ Actions' : 'Actions'}
+                    </h3>
+                    <div className="flex gap-2">
+                      <div className="flex-grow">
+                        <ActionButton label="🎲 Roll Dice" onClick={handleRollDice} disabled={!canRoll} loading={actionLoading === 'roll'} variant="primary" />
+                      </div>
+                      {canPayJail && (
+                        <div className="flex-grow">
+                          <ActionButton label="💸 Pay Jail ₹500" onClick={handlePayJail} disabled={!canPayJail} loading={actionLoading === 'jail'} variant="danger" />
+                        </div>
+                      )}
+                      <div className="flex-grow">
+                        <ActionButton label="✔ End Turn" onClick={handleEndTurn} disabled={!canEnd} loading={actionLoading === 'end'} variant="secondary" />
+                      </div>
+                    </div>
+                    {!isMyTurn && gameState && (
+                      <p className="text-xs text-center mt-1" style={{ color: 'rgba(156,163,175,0.35)' }}>
+                        Waiting for {gameState.players?.[currentPlayerId]?.username ?? '…'}
+                      </p>
+                    )}
+                    {/* Pending card draw hint */}
+                    {boardAnimation.pendingCardDraw && (
+                      <div style={{
+                        padding: '6px 8px', borderRadius: 8,
+                        background: boardAnimation.pendingCardDraw.deck === 'chance' ? 'rgba(245,158,11,0.08)' : 'rgba(59,130,246,0.08)',
+                        border: `1px solid ${boardAnimation.pendingCardDraw.deck === 'chance' ? 'rgba(245,158,11,0.25)' : 'rgba(59,130,246,0.25)'}`,
+                        fontSize: 10, color: boardAnimation.pendingCardDraw.deck === 'chance' ? '#fbbf24' : '#93c5fd',
+                        textAlign: 'center', fontWeight: 600,
+                      }}>
+                        {boardAnimation.pendingCardDraw.playerId === myId
+                          ? `Click ${boardAnimation.pendingCardDraw.deck === 'chance' ? 'Chance ❓' : 'Community 📦'} deck!`
+                          : `Waiting for ${gameState?.players?.[boardAnimation.pendingCardDraw.playerId]?.username ?? '…'} to draw…`
+                        }
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Events feed */}
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: 'rgba(212,175,55,0.5)' }}>Live Events</h3>
+                  <div className="flex flex-col gap-1 overflow-y-auto p-2 rounded-xl" style={{ maxHeight: '180px', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.02)' }}>
+                    {events.length === 0 ? (
+                      <p className="text-xs" style={{ color: 'rgba(156,163,175,0.25)' }}>No events yet…</p>
+                    ) : (
+                      events.slice(-20).map((ev, i) => (
+                        <p key={i} className="text-xs leading-snug"
+                          style={{
+                            color: ev.type === 'system' ? 'rgba(245,158,11,0.6)' : 'rgba(209,213,219,0.55)',
+                            fontFamily: "'DM Sans',sans-serif",
+                            borderLeft: ev.type === 'system' ? '2px solid rgba(245,158,11,0.3)' : '2px solid rgba(255,255,255,0.06)',
+                            paddingLeft: '6px',
+                          }}
+                        >
+                          {ev.message}
+                        </p>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'chat' && (
+              <div className="flex flex-col h-[280px] md:h-[380px] p-1 rounded-xl" style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.03)' }}>
+                {/* Chat Message feed */}
+                <div className="flex-grow overflow-y-auto flex flex-col gap-2 p-2" style={{ minHeight: '180px' }}>
+                  {chatMessages.length === 0 ? (
+                    <p className="text-xs text-center mt-4" style={{ color: 'rgba(156,163,175,0.25)' }}>No messages yet</p>
+                  ) : (
+                    chatMessages.map((msg) => (
+                      <ChatBubble key={msg.id} msg={msg} isMe={msg.playerId === myId} players={players} />
+                    ))
+                  )}
+                </div>
+
+                {/* Chat Input */}
+                <div className="p-2 flex gap-2 flex-shrink-0 relative" style={{ borderTop: '1px solid rgba(255,255,255,0.05)', alignItems: 'center', position: 'relative' }}>
+                  {/* Mentions Suggestions Dropdown */}
+                  {showMentionsDropdown && filteredPlayers.length > 0 && (
+                    <div className="absolute bottom-12 left-0 right-0 p-1.5 rounded-xl flex flex-col gap-1 z-30 backdrop-blur-md animate-fade-in"
+                         style={{
+                           background: 'rgba(15,10,5,0.95)',
+                           border: '1.5px solid rgba(212,175,55,0.35)',
+                           boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+                           maxHeight: '140px',
+                           overflowY: 'auto'
+                         }}>
+                      {filteredPlayers.map(p => (
+                        <button
+                          key={p.id}
+                          onClick={() => selectMention(p)}
+                          className="w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-300 hover:bg-yellow-500/10 hover:text-yellow-500 transition-colors duration-150 cursor-pointer"
+                          style={{ fontFamily: "'DM Sans', sans-serif" }}
+                        >
+                          👤 @{p.username}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Emoji Reaction Drawer */}
+                  {showEmojiPicker && (
+                    <div className="absolute bottom-12 left-0 right-0 p-2 rounded-xl flex gap-2 justify-around z-20 backdrop-blur-md animate-fade-in"
+                         style={{
+                           background: 'rgba(15,10,5,0.95)',
+                           border: '1.5px solid rgba(212,175,55,0.3)',
+                           boxShadow: '0 8px 32px rgba(0,0,0,0.6)'
+                         }}>
+                      {QUICK_EMOJIS.map(emoji => (
+                        <button
+                          key={emoji}
+                          onClick={() => {
+                            setChatInput(prev => prev + emoji);
+                            setShowEmojiPicker(false);
+                          }}
+                          className="text-base hover:scale-125 transition-transform duration-150 cursor-pointer p-0.5"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {isRecording ? (
+                    <div className="flex-grow flex items-center justify-between px-3 py-1.5 rounded-lg text-[10px] font-semibold"
+                         style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5' }}>
+                      <span>🔴 Recording: 0:{recDuration.toString().padStart(2, '0')}</span>
+                      <button onClick={stopRecording}
+                              className="px-2 py-0.5 rounded bg-red-600 hover:bg-red-700 text-white font-bold cursor-pointer text-[8px] uppercase tracking-wider transition-all">
+                        Stop ⏹️
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="relative flex-1 flex items-center min-w-0">
+                        <input
+                          value={chatInput}
+                          onChange={e => handleChatInputChange(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') handleChat(); }}
+                          placeholder="Type @name..."
+                          maxLength={300}
+                          className="w-full pl-3 pr-14 py-1.5 rounded-lg text-xs outline-none"
+                          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#f3f4f6' }}
+                        />
+                        <div className="absolute right-1 flex items-center gap-0.5">
+                          <button
+                            onClick={() => { setShowEmojiPicker(!showEmojiPicker); setShowMentionsDropdown(false); }}
+                            className="p-1 text-sm cursor-pointer hover:bg-white/10 rounded transition-all"
+                            style={{ border: 'none', background: 'transparent' }}
+                            title="Insert emoji"
+                          >
+                            😀
+                          </button>
+                          <button
+                            onClick={startRecording}
+                            className="p-1 text-sm cursor-pointer hover:bg-white/10 rounded transition-all"
+                            style={{ border: 'none', background: 'transparent' }}
+                            title="Record voice message"
+                          >
+                            🎙️
+                          </button>
+                        </div>
+                      </div>
+                      <button onClick={handleChat}
+                        className="px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-all flex-shrink-0"
+                        style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.18)' }}>
+                        ↑
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'properties' && (
+              <div className="flex flex-col gap-3 p-1">
+                {/* Asset Action Controls */}
+                {isMyTurn && gameState?.status === 'playing' && (
+                  <div className="grid grid-cols-2 gap-2 p-2 rounded-xl" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
+                    <button
+                      onClick={() => setShowTradeModal(true)}
+                      className="py-2 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer"
+                      style={{
+                        background: 'rgba(59,130,246,0.12)',
+                        border: '1px solid rgba(59,130,246,0.3)',
+                        color: '#93c5fd',
+                        fontFamily: "'DM Sans',sans-serif",
+                      }}
+                    >
+                      🤝 Trade
+                    </button>
+                    <button
+                      onClick={() => setShowBuildPanel(true)}
+                      className="py-2 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer"
+                      style={{
+                        background: 'rgba(34,197,94,0.12)',
+                        border: '1px solid rgba(34,197,94,0.3)',
+                        color: '#4ade80',
+                        fontFamily: "'DM Sans',sans-serif",
+                      }}
+                    >
+                      🏠 Build
+                    </button>
+                    <button
+                      onClick={() => setShowLoanModal(true)}
+                      disabled={me?.loanActive}
+                      className="col-span-2 py-2 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer"
+                      style={{
+                        background: me?.loanActive ? 'rgba(100,100,100,0.08)' : 'rgba(212,175,55,0.12)',
+                        border: me?.loanActive ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(212,175,55,0.3)',
+                        color: me?.loanActive ? '#6b7280' : '#fbf5b7',
+                        fontFamily: "'DM Sans',sans-serif",
+                        cursor: me?.loanActive ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      🏦 Take Loan
+                    </button>
+                    {me?.loanActive && (
+                      <button
+                        onClick={handleRepayLoan}
+                        className="col-span-2 py-2 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer"
+                        style={{
+                          background: 'rgba(34,197,94,0.15)',
+                          border: '1px solid rgba(34,197,94,0.35)',
+                          color: '#4ade80',
+                          fontFamily: "'DM Sans',sans-serif",
+                        }}
+                      >
+                        💰 Repay Loan
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* My properties list */}
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: 'rgba(212,175,55,0.5)' }}>My Properties ({myProperties.length})</h3>
+                  <div className="flex flex-col gap-2">
+                    {myProperties.length === 0 ? (
+                      <p className="text-xs text-center py-4" style={{ color: 'rgba(156,163,175,0.45)' }}>
+                        🏠 No properties owned yet. Land on buyable properties to purchase!
+                      </p>
+                    ) : (
+                      myProperties.map(({ id, tile, mortgaged, houses, hotel }) => {
+                        const groupColor = tile.group ? (COLOR_GROUP_META[tile.group]?.hex ?? '#9ca3af') : '#4b5563';
+                        const currentRent = calculateRent(gameState.properties, gameState.players, id, '', 7);
+                        const fmtNum = (val) => Number(val ?? 0).toLocaleString('en-IN');
+                        return (
+                          <div
+                            key={id}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                              padding: '6px 8px',
+                              background: 'rgba(255,255,255,0.02)',
+                              border: '1px solid rgba(255,255,255,0.04)',
+                              borderRadius: 10,
+                              position: 'relative',
+                              overflow: 'hidden',
+                              opacity: mortgaged ? 0.6 : 1,
+                            }}
+                          >
+                            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: groupColor }} />
+                            <div style={{ fontSize: 14, marginLeft: 4 }}>{tile.icon}</div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <span style={{ fontSize: 10, fontWeight: 700, color: '#f3f4f6', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {tile.name}
+                                </span>
+                                {mortgaged && (
+                                  <span style={{ fontSize: 7, fontWeight: 800, color: '#ef4444', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.2)', padding: '0 3px', borderRadius: 3 }}>
+                                    M
+                                  </span>
+                                )}
+                              </div>
+                              {(houses > 0 || hotel) && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginTop: 1 }}>
+                                  {hotel ? (
+                                    <span style={{ fontSize: 8, color: '#a855f7', fontWeight: 800 }}>🏨 Hotel</span>
+                                  ) : (
+                                    <span style={{ fontSize: 8, color: '#22c55e', fontWeight: 800 }}>
+                                      {'🟢'.repeat(houses)}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                              <div style={{ fontSize: 7, color: 'rgba(156,163,175,0.4)', textTransform: 'uppercase' }}>Rent</div>
+                              <div style={{ fontSize: 10, fontWeight: 800, color: mortgaged ? 'rgba(156,163,175,0.4)' : '#fbbf24' }}>
+                                {mortgaged ? '₹0' : `₹${fmtNum(currentRent)}`}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
+
+      {/* Players Management Modal */}
+      {showPlayersModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(8px)' }}>
+          <div className="w-full max-w-md rounded-2xl border p-6 flex flex-col gap-4 animate-scaleIn"
+            style={{
+              background: 'radial-gradient(circle at 50% 0%, #1e140a 0%, #0c0805 100%)',
+              borderColor: 'rgba(212,175,55,0.3)',
+              boxShadow: '0 10px 40px rgba(0,0,0,0.8), 0 0 30px rgba(212,175,55,0.1) inset',
+            }}>
+            <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
+              <h2 className="text-lg font-bold uppercase tracking-wider" style={{ color: '#f59e0b', fontFamily: "'DM Sans', sans-serif" }}>
+                👥 Players List
+              </h2>
+              <button
+                onClick={() => setShowPlayersModal(false)}
+                className="text-gray-400 hover:text-white cursor-pointer transition-colors text-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-3 py-2 overflow-y-auto max-h-[300px]">
+              {players.map((p, i) => {
+                const token = p.token || PLAYER_TOKENS[i % PLAYER_TOKENS.length];
+                const isMe = p.id === myId;
+                const showKick = isHost && !isMe && !p.isBankrupt;
+                const showVoteKickHost = !isHost && (p.id === room?.hostId) && !p.isBankrupt;
+                return (
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between p-3 rounded-xl transition-all duration-200 border"
+                    style={{
+                      background: isMe ? 'rgba(212,175,55,0.05)' : 'rgba(255,255,255,0.02)',
+                      borderColor: isMe ? 'rgba(212,175,55,0.2)' : 'rgba(255,255,255,0.05)',
+                    }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl">{token}</span>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-bold flex items-center gap-1.5" style={{ color: isMe ? '#fde68a' : '#f3f4f6' }}>
+                          {p.username}
+                          {isMe && <span className="text-[10px] px-1 py-0.5 rounded bg-yellow-500/15 text-yellow-500 font-bold uppercase">You</span>}
+                          {p.id === room?.hostId && <span className="text-[10px] px-1 py-0.5 rounded bg-amber-500/15 text-amber-500 font-bold uppercase">Host</span>}
+                        </span>
+                        <span className="text-[10px] text-gray-500">
+                          ₹{Number(p.money ?? 0).toLocaleString('en-IN')} • {p.isBankrupt ? 'Bankrupt' : 'Active'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {showKick && (
+                      <button
+                        onClick={() => {
+                          handleKickPlayerInGame(p.id);
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer border border-red-500/25 bg-red-500/10 text-red-400 hover:bg-red-500/25"
+                        style={{ fontFamily: "'DM Sans', sans-serif" }}
+                      >
+                        ❌ Kick
+                      </button>
+                    )}
+
+                    {showVoteKickHost && (
+                      <button
+                        onClick={() => {
+                          handleVoteKickHostInitiate();
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer border border-amber-500/25 bg-amber-500/10 text-amber-400 hover:bg-amber-500/25"
+                        style={{ fontFamily: "'DM Sans', sans-serif" }}
+                      >
+                        ⚠️ Vote Kick
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-2">
+              <button
+                onClick={() => setShowPlayersModal(false)}
+                className="w-full py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all duration-200 cursor-pointer border hover:bg-white/5"
+                style={{
+                  background: 'rgba(255,255,255,0.03)',
+                  borderColor: 'rgba(255,255,255,0.08)',
+                  color: '#d1d5db',
+                  fontFamily: "'DM Sans', sans-serif",
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* End Game Modal */}
       <EndGameModal
@@ -1196,6 +2211,105 @@ export default function GameRoom() {
           setHasDismissedBankruptcy(true);
         }}
       />
+
+      {/* Rule Book Modal */}
+      <RuleBookModal
+        isOpen={showRuleBook}
+        onClose={() => setShowRuleBook(false)}
+      />
+
+      {/* Vote Kick Host Modal Overlay */}
+      {gameState?.kickHostVote && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)' }}>
+          <div className="w-full max-w-md rounded-2xl border p-6 flex flex-col gap-4 animate-scaleIn"
+            style={{
+              background: 'radial-gradient(circle at 50% 0%, #291212 0%, #0d0606 100%)',
+              borderColor: 'rgba(239,68,68,0.35)',
+              boxShadow: '0 10px 40px rgba(0,0,0,0.85), 0 0 30px rgba(239,68,68,0.1) inset',
+            }}>
+            <div className="flex items-center gap-2.5 border-b pb-3" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
+              <span className="text-xl">⚠️</span>
+              <h2 className="text-base font-bold uppercase tracking-wider text-red-400" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+                Vote to Kick Host
+              </h2>
+            </div>
+
+            <div className="text-sm text-gray-300 leading-relaxed">
+              <span className="font-semibold text-white">
+                {gameState.players[gameState.kickHostVote.initiatorId]?.username ?? 'A player'}
+              </span>{' '}
+              has initiated a vote to kick host{' '}
+              <span className="font-semibold text-white">
+                {gameState.players[gameState.kickHostVote.targetId]?.username ?? 'the host'}
+              </span>{' '}
+              out of the game. If approved, the host's properties will be unowned and put back on sale.
+            </div>
+
+            {/* Players Vote Status */}
+            <div className="flex flex-col gap-2 my-2 max-h-[200px] overflow-y-auto pr-1">
+              {Object.values(gameState.players)
+                .filter(p => !p.isBankrupt && p.id !== gameState.kickHostVote.targetId)
+                .map((p) => {
+                  const voteVal = gameState.kickHostVote.votes[p.id];
+                  let badge = (
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-white/5 text-gray-400 border border-white/10 font-bold uppercase">
+                      ⏳ Pending
+                    </span>
+                  );
+                  if (voteVal === true) {
+                    badge = (
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 font-bold uppercase">
+                        ✅ Yes
+                      </span>
+                    );
+                  } else if (voteVal === false) {
+                    badge = (
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/25 font-bold uppercase">
+                        ❌ No
+                      </span>
+                    );
+                  }
+                  return (
+                    <div key={p.id} className="flex items-center justify-between p-2 rounded-lg bg-white/5 border border-white/5">
+                      <span className="text-xs font-bold text-gray-200">{p.username}</span>
+                      {badge}
+                    </div>
+                  );
+                })}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="mt-2 flex flex-col gap-2.5">
+              {myId === gameState.kickHostVote.targetId ? (
+                <div className="text-xs text-center py-2 text-red-300 font-semibold animate-pulse">
+                  ⚠️ A vote is currently in progress to kick you.
+                </div>
+              ) : gameState.kickHostVote.votes[myId] !== undefined ? (
+                <div className="text-xs text-center py-2 text-gray-400">
+                  You voted <span className="font-semibold text-white">{gameState.kickHostVote.votes[myId] ? 'YES' : 'NO'}</span>. Waiting for other players...
+                </div>
+              ) : (
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => handleVoteKickHostCast(true)}
+                    className="flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"
+                    style={{ fontFamily: "'DM Sans', sans-serif" }}
+                  >
+                    Yes, Kick
+                  </button>
+                  <button
+                    onClick={() => handleVoteKickHostCast(false)}
+                    className="flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20"
+                    style={{ fontFamily: "'DM Sans', sans-serif" }}
+                  >
+                    No, Keep
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

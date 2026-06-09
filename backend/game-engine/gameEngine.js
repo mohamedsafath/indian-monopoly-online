@@ -40,6 +40,8 @@
 
 'use strict';
 
+const crypto = require('crypto');
+
 const {
   TILE_TYPES,
   TILE_BY_ID,
@@ -69,7 +71,7 @@ const {
 // CONSTANTS
 // ─────────────────────────────────────────────────────────────────────────────
 
-const STARTING_BALANCE      = 15_000;  // ₹15,000 each player starts with
+const STARTING_BALANCE      = 20_000;  // ₹20,000 each player starts with
 const GO_REWARD             = 2_000;   // ₹2,000 collected passing/landing on tile 0
 const JAIL_TILE             = 10;      // Board position of Tihar Jail
 const GO_TILE               = 0;       // Board position of Start Journey
@@ -85,7 +87,7 @@ const HOUSES_PER_HOTEL      = 4;
 const TURN_TIMEOUT_SECONDS  = 90;      // AFK timeout per turn
 
 // Available player tokens + colours (assigned by join order)
-const PLAYER_TOKENS = ['🚗', '🐘', '🚆', '👑', '🛺', '🐅', '⚓', '🎯'];
+const PLAYER_TOKENS = ['🚗', '🐘', '🚆', '👑', '🛺', '🐅', '⚓', '🎯', '🦚', '🏏', '☕', '🪔', '🦁', '🚁', '🚢', '💼', '💰', '🎩'];
 const PLAYER_COLORS = [
   '#e74c3c', '#3498db', '#2ecc71', '#f39c12',
   '#9b59b6', '#1abc9c', '#e67e22', '#34495e',
@@ -148,6 +150,13 @@ const EVENT_TYPES = Object.freeze({
   END_GAME_APPROVED:    'END_GAME_APPROVED',
   END_GAME_VOTE_REJECTED:'END_GAME_VOTE_REJECTED',
 
+  // Kick Host Voting
+  KICK_HOST_REQUESTED:   'KICK_HOST_REQUESTED',
+  KICK_HOST_ACCEPTED:    'KICK_HOST_ACCEPTED',
+  KICK_HOST_REJECTED:    'KICK_HOST_REJECTED',
+  KICK_HOST_APPROVED:    'KICK_HOST_APPROVED',
+  KICK_HOST_VOTE_REJECTED:'KICK_HOST_VOTE_REJECTED',
+
   // Turn
   TURN_STARTED:         'TURN_STARTED',
   TURN_ENDED:           'TURN_ENDED',
@@ -173,6 +182,7 @@ const EVENT_TYPES = Object.freeze({
   LOAN_REPAYMENT_DUE:   'LOAN_REPAYMENT_DUE',
   LOAN_REPAID:          'LOAN_REPAID',
   LOAN_DEFAULTED:       'LOAN_DEFAULTED',
+  BANK_REPOSSESSION:    'BANK_REPOSSESSION',
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -234,13 +244,15 @@ const initializeGame = (roomId, players) => {
   // ── Build player states ───────────────────────────────────────────────────
   const playerStates = {};
   players.forEach((player, idx) => {
-    const tokenIdx = idx % PLAYER_TOKENS.length;
+    const activeToken = player.token || PLAYER_TOKENS[idx % PLAYER_TOKENS.length];
+    const tokenIdx = PLAYER_TOKENS.indexOf(activeToken);
+    const colorIdx = tokenIdx !== -1 ? tokenIdx : idx;
     playerStates[player.id] = {
       id:           player.id,
       username:     player.username,
       socketId:     player.socketId,
-      token:        PLAYER_TOKENS[tokenIdx],
-      color:        PLAYER_COLORS[tokenIdx],
+      token:        activeToken,
+      color:        PLAYER_COLORS[colorIdx % PLAYER_COLORS.length],
 
       // Board state
       position:     GO_TILE,        // everyone starts on Start Journey
@@ -265,6 +277,15 @@ const initializeGame = (roomId, players) => {
       isBankrupt:   false,
       isConnected:  true,
       turnOrder:    turnOrder.indexOf(player.id),  // 0-based display order
+
+      // Statistics tracking
+      rentCollected:              0,
+      loansTakenCount:            0,
+      propertiesRepossessedCount: 0,
+      propertiesPurchasedCount:   0,
+      propertiesMortgagedCount:   0,
+      auctionsWonCount:           0,
+      rentPaidAmount:             0,
     };
   });
 
@@ -314,6 +335,7 @@ const initializeGame = (roomId, players) => {
 
     // Active auction (null when no auction in progress)
     activeAuction:  null,
+    queuedAuctions: [],
 
     // Append-only event log — last 200 entries kept
     log:            [],
@@ -738,6 +760,7 @@ const buyProperty = (gameState, playerId) => {
 
   player.money   -= tile.price;
   prop.ownerId    = playerId;
+  player.propertiesPurchasedCount = (player.propertiesPurchasedCount ?? 0) + 1;
   gameState.pendingAction = null;
 
   const events = [evt(
@@ -774,6 +797,7 @@ const mortgageProperty = (gameState, playerId, tileId) => {
 
   prop.mortgaged  = true;
   player.money   += tile.mortgage;
+  player.propertiesMortgagedCount = (player.propertiesMortgagedCount ?? 0) + 1;
 
   const events = [evt(
     EVENT_TYPES.PROPERTY_MORTGAGED,
@@ -1034,6 +1058,8 @@ const _payRent = (gameState, landingPlayer, tileId, events) => {
   // Full rent payment (allows negative balance)
   landingPlayer.money -= rent;
   owner.money         += rent;
+  owner.rentCollected = (owner.rentCollected ?? 0) + rent;
+  landingPlayer.rentPaidAmount = (landingPlayer.rentPaidAmount ?? 0) + rent;
   if (landingPlayer.money < 0) {
     landingPlayer.creditorId = owner.id;
   }
@@ -1183,11 +1209,12 @@ const _applyCardEffect = (gameState, player, card, events) => {
     case EFFECT_TYPES.MOVE: {
       if (typeof effect.moveBack === 'number') {
         // Move backward
-        const newPos = ((player.position - effect.moveBack) + BOARD_SIZE) % BOARD_SIZE;
+        const oldPos = player.position;
+        const newPos = ((oldPos - effect.moveBack) + BOARD_SIZE) % BOARD_SIZE;
         player.position = newPos;
         events.push(evt(
           EVENT_TYPES.PLAYER_MOVED,
-          { playerId: player.id, from: player.position + effect.moveBack, to: newPos, moveBack: effect.moveBack },
+          { playerId: player.id, from: oldPos, to: newPos, moveBack: effect.moveBack },
           `${player.username} moved back ${effect.moveBack} spaces`,
         ));
         _processTileLanding(gameState, player, newPos, events);
@@ -1231,6 +1258,8 @@ const _applyCardEffect = (gameState, player, card, events) => {
           const actual = Math.min(doubleRent, player.money);
           player.money -= actual;
           owner.money  += actual;
+          owner.rentCollected = (owner.rentCollected ?? 0) + actual;
+          player.rentPaidAmount = (player.rentPaidAmount ?? 0) + actual;
           events.push(evt(
             EVENT_TYPES.RENT_PAID,
             {
@@ -1390,6 +1419,14 @@ const getPlayerRankingData = (gameState) => {
       outstandingDebts,
       netWorth,
       isBankrupt: player.isBankrupt,
+      rentCollected: player.rentCollected ?? 0,
+      loansTaken: player.loansTakenCount ?? 0,
+      propertiesRepossessed: player.propertiesRepossessedCount ?? 0,
+      propertiesPurchased: player.propertiesPurchasedCount ?? 0,
+      propertiesMortgaged: player.propertiesMortgagedCount ?? 0,
+      auctionsWon: player.auctionsWonCount ?? 0,
+      rentPaid: player.rentPaidAmount ?? 0,
+      rentEarned: player.rentCollected ?? 0,
     };
   });
 };
@@ -1422,24 +1459,15 @@ const _processBankruptcy = (gameState, bankruptPlayerId, creditorId) => {
   }
   player.money = 0;
 
+  const repossessedList = [];
+  gameState.queuedAuctions = gameState.queuedAuctions || [];
+
   // Transfer / return all properties
   Object.values(gameState.properties).forEach((prop) => {
     if (prop.ownerId !== bankruptPlayerId) return;
 
-    if (creditorId && gameState.players[creditorId]) {
-      // Transfer to creditor — strip buildings first (creditor must re-build)
-      if (prop.hotel) {
-        gameState.hotelBank += 1;
-        prop.hotel = false;
-      }
-      if (prop.houses > 0) {
-        gameState.houseBank += prop.houses;
-        prop.houses = 0;
-      }
-      prop.mortgaged = false;
-      prop.ownerId   = creditorId;
-    } else {
-      // Return to bank
+    if (prop.mortgaged) {
+      // Mortgaged property always repossessed by the bank
       if (prop.hotel) {
         gameState.hotelBank += 1;
         prop.hotel = false;
@@ -1450,6 +1478,34 @@ const _processBankruptcy = (gameState, bankruptPlayerId, creditorId) => {
       }
       prop.mortgaged = false;
       prop.ownerId   = null;
+      repossessedList.push(prop.tileId);
+    } else {
+      if (creditorId && gameState.players[creditorId] && !gameState.players[creditorId].isBankrupt) {
+        // Transfer unmortgaged property to creditor — strip buildings first
+        if (prop.hotel) {
+          gameState.hotelBank += 1;
+          prop.hotel = false;
+        }
+        if (prop.houses > 0) {
+          gameState.houseBank += prop.houses;
+          prop.houses = 0;
+        }
+        prop.mortgaged = false;
+        prop.ownerId   = creditorId;
+      } else {
+        // Return unmortgaged property to bank
+        if (prop.hotel) {
+          gameState.hotelBank += 1;
+          prop.hotel = false;
+        }
+        if (prop.houses > 0) {
+          gameState.houseBank += prop.houses;
+          prop.houses = 0;
+        }
+        prop.mortgaged = false;
+        prop.ownerId   = null;
+        repossessedList.push(prop.tileId);
+      }
     }
   });
 
@@ -1466,8 +1522,23 @@ const _processBankruptcy = (gameState, bankruptPlayerId, creditorId) => {
     `💸 ${player.username} is BANKRUPT! Assets transferred to ${creditorName}`,
   ));
 
+  // Log and register repossession
+  if (repossessedList.length > 0) {
+    player.propertiesRepossessedCount = (player.propertiesRepossessedCount ?? 0) + repossessedList.length;
+    repossessedList.forEach((tileId) => {
+      const tile = TILE_BY_ID[tileId];
+      events.push(evt(
+        EVENT_TYPES.BANK_REPOSSESSION,
+        { playerId: bankruptPlayerId, tileId },
+        `🏦 The Bank repossessed ${tile.name} and returned it to circulation`,
+      ));
+    });
+  }
+
   // Check win condition
   _checkWinCondition(gameState, events);
+
+  // Properties are returned directly to the bank as unowned (for sale) instead of being queued for auction.
 
   return events;
 };
@@ -1656,17 +1727,34 @@ const skipAfkTurn = (gameState) => {
   if (!currentPlayerId) return fail('No active player');
 
   const events = [];
+  const player = gameState.players[currentPlayerId];
 
-  if (!gameState.hasRolled) {
-    // Auto-roll
-    const rollResult = rollDice(gameState, currentPlayerId);
-    events.push(...rollResult.events);
+  if (player && player.money < 0) {
+    // Player failed to resolve debt shortfall and timed out — auto-bankrupt!
+    const creditorId = player.creditorId || null;
+    const bkEvents = _processBankruptcy(gameState, currentPlayerId, creditorId);
+    events.push(...bkEvents);
+
+    // Advance turn unless an auction is now pending
+    const currentCP = currentPlayer(gameState);
+    if (currentCP && currentCP.id === currentPlayerId) {
+      if (gameState.pendingAction !== 'auction') {
+        const advanceEvents = _advanceTurn(gameState);
+        events.push(...advanceEvents);
+      }
+    }
+  } else {
+    if (!gameState.hasRolled) {
+      // Auto-roll
+      const rollResult = rollDice(gameState, currentPlayerId);
+      events.push(...rollResult.events);
+    }
+
+    // Force end turn (skip buy decision)
+    gameState.pendingAction = null;
+    const advEvents = _advanceTurn(gameState);
+    events.push(...advEvents);
   }
-
-  // Force end turn (skip buy decision)
-  gameState.pendingAction = null;
-  const advEvents = _advanceTurn(gameState);
-  events.push(...advEvents);
 
   _appendLog(gameState, events);
   return ok(events);
@@ -1715,8 +1803,22 @@ const initiateTrade = (gameState, fromPlayerId, toPlayerId, offer, request) => {
   if (fromPlayerId === toPlayerId)           return fail('Cannot trade with yourself');
   if (gameState.activeTrade)                return fail('A trade is already in progress');
 
+  if (!offer || !request) {
+    return fail('Invalid trade payload');
+  }
+
+  const offerMoney = offer.money ?? 0;
+  const requestMoney = request.money ?? 0;
+
+  if (typeof offerMoney !== 'number' || !Number.isFinite(offerMoney) || offerMoney < 0) {
+    return fail('Offer money must be a valid non-negative number');
+  }
+  if (typeof requestMoney !== 'number' || !Number.isFinite(requestMoney) || requestMoney < 0) {
+    return fail('Request money must be a valid non-negative number');
+  }
+
   // Validate offer money
-  if ((offer.money ?? 0) > fromPlayer.money) {
+  if (offerMoney > fromPlayer.money) {
     return fail('You cannot offer more money than you have');
   }
   // Validate offer properties
@@ -1726,7 +1828,7 @@ const initiateTrade = (gameState, fromPlayerId, toPlayerId, offer, request) => {
     }
   }
   // Validate request money
-  if ((request.money ?? 0) > toPlayer.money) {
+  if (requestMoney > toPlayer.money) {
     return fail('Target player does not have that much money');
   }
   // Validate request properties
@@ -1742,8 +1844,8 @@ const initiateTrade = (gameState, fromPlayerId, toPlayerId, offer, request) => {
     tradeId,
     fromPlayerId,
     toPlayerId,
-    offer:   { money: offer.money ?? 0,   propertyIds: offer.propertyIds ?? [] },
-    request: { money: request.money ?? 0, propertyIds: request.propertyIds ?? [] },
+    offer:   { money: offerMoney,   propertyIds: offer.propertyIds ?? [] },
+    request: { money: requestMoney, propertyIds: request.propertyIds ?? [] },
     status: 'pending',
     initiatedAt: Date.now(),
   };
@@ -1989,6 +2091,8 @@ const _concludeAuction = (gameState) => {
     const winner    = gameState.players[auction.highBidderId];
     winner.money   -= auction.highBid;
     gameState.properties[auction.tileId].ownerId = auction.highBidderId;
+    winner.propertiesPurchasedCount = (winner.propertiesPurchasedCount ?? 0) + 1;
+    winner.auctionsWonCount = (winner.auctionsWonCount ?? 0) + 1;
 
     if (hasSeller) {
       const seller = gameState.players[auction.ownerId];
@@ -2016,9 +2120,15 @@ const _concludeAuction = (gameState) => {
   gameState.pendingAction  = null;
 
   if (!hasSeller) {
-    // Advance turn after bank/unowned auction
-    const turnEvents = _advanceTurn(gameState);
-    events.push(...turnEvents);
+    // Advance turn after bank/unowned auction, unless there are queued repossessed auctions
+    if (gameState.queuedAuctions && gameState.queuedAuctions.length > 0) {
+      const nextTileId = gameState.queuedAuctions.shift();
+      const auctionEvent = _startAuction(gameState, nextTileId);
+      events.push(auctionEvent);
+    } else {
+      const turnEvents = _advanceTurn(gameState);
+      events.push(...turnEvents);
+    }
   }
 
   return events;
@@ -2142,6 +2252,7 @@ const getClientState = (gameState) => ({
   chanceIndex:    gameState.chanceIndex,
   communityIndex: gameState.communityIndex,
   endGameVote:    gameState.endGameVote || null,
+  kickHostVote:   gameState.kickHostVote || null,
   ranking:        gameState.ranking || null,
 });
 
@@ -2191,7 +2302,7 @@ const guardTurn = (gameState, playerId) => {
  * randomDie — Return a random integer 1–6.
  * @returns {number}
  */
-const randomDie = () => Math.floor(Math.random() * 6) + 1;
+const randomDie = () => crypto.randomInt(1, 7);
 
 /**
  * shuffleArray — Fisher-Yates in-place shuffle. Returns the array.
@@ -2200,7 +2311,7 @@ const randomDie = () => Math.floor(Math.random() * 6) + 1;
  */
 const shuffleArray = (arr) => {
   for (let i = arr.length - 1; i > 0; i--) {
-    const j    = Math.floor(Math.random() * (i + 1));
+    const j    = crypto.randomInt(0, i + 1);
     const tmp  = arr[i];
     arr[i]     = arr[j];
     arr[j]     = tmp;
@@ -2345,6 +2456,7 @@ const takeLoan = (gameState, playerId, amount) => {
   player.loanRepaymentAmount = Math.floor(amount * 1.2);
   player.loanTurnsRemaining = 5;
   player.money += amount;
+  player.loansTakenCount = (player.loansTakenCount ?? 0) + 1;
 
   const events = [evt(
     EVENT_TYPES.LOAN_APPROVED,
@@ -2395,11 +2507,13 @@ const declareBankruptcy = (gameState, playerId) => {
   const creditorId = player.creditorId || null;
   const events = _processBankruptcy(gameState, playerId, creditorId);
 
-  // If it was their turn, advance the turn
+  // If it was their turn, advance the turn, unless an auction is now pending
   const currentCP = currentPlayer(gameState);
   if (currentCP && currentCP.id === playerId) {
-    const advanceEvents = _advanceTurn(gameState);
-    events.push(...advanceEvents);
+    if (gameState.pendingAction !== 'auction') {
+      const advanceEvents = _advanceTurn(gameState);
+      events.push(...advanceEvents);
+    }
   }
 
   _appendLog(gameState, events);
@@ -2505,14 +2619,150 @@ const _checkEndGameVoteResolution = (gameState, events) => {
     ));
 
     gameState.endGameVote = null; // Clear vote state
-  } else if (rejectsCount >= (totalActive - majorityNeeded + 1)) {
+  }
+};
+
+/**
+ * requestKickHost — Initiate a vote to kick the host player.
+ */
+const requestKickHost = (gameState, playerId, hostId) => {
+  if (gameState.status !== 'playing') return fail('Game is not active');
+  if (gameState.kickHostVote) return fail('A kick host vote is already in progress');
+
+  const player = gameState.players[playerId];
+  if (!player || player.isBankrupt) return fail('Invalid player');
+
+  const hostPlayer = gameState.players[hostId];
+  if (!hostPlayer || hostPlayer.isBankrupt) return fail('Host is not active or invalid');
+
+  if (playerId === hostId) return fail('You cannot initiate a vote to kick yourself');
+
+  // Initialize the vote
+  gameState.kickHostVote = {
+    initiatorId: playerId,
+    targetId: hostId,
+    votes: {
+      [playerId]: true, // Initiator automatically votes YES
+    },
+  };
+
+  const events = [evt(
+    EVENT_TYPES.KICK_HOST_REQUESTED,
+    { playerId, targetId: hostId, username: player.username, targetUsername: hostPlayer.username },
+    `🗳️ ${player.username} initiated a vote to kick host ${hostPlayer.username}`
+  )];
+
+  _appendLog(gameState, events);
+
+  _checkKickHostVoteResolution(gameState, events);
+
+  return ok(events);
+};
+
+/**
+ * voteKickHost — Cast a vote to kick the host.
+ */
+const voteKickHost = (gameState, playerId, accept) => {
+  if (gameState.status !== 'playing') return fail('Game is not active');
+  if (!gameState.kickHostVote) return fail('No kick host vote is in progress');
+
+  const player = gameState.players[playerId];
+  if (!player || player.isBankrupt) return fail('Only active players can vote');
+
+  if (playerId === gameState.kickHostVote.targetId) {
+    return fail('The host cannot vote in their own kick vote');
+  }
+
+  gameState.kickHostVote.votes[playerId] = Boolean(accept);
+
+  const events = [evt(
+    accept ? EVENT_TYPES.KICK_HOST_ACCEPTED : EVENT_TYPES.KICK_HOST_REJECTED,
+    { playerId, username: player.username, accept },
+    accept ? `👍 ${player.username} voted YES to kick host` : `❌ ${player.username} voted NO to kick host`
+  )];
+
+  _appendLog(gameState, events);
+
+  _checkKickHostVoteResolution(gameState, events);
+
+  return ok(events);
+};
+
+/**
+ * _checkKickHostVoteResolution — Internal helper to check vote results.
+ */
+const _checkKickHostVoteResolution = (gameState, events) => {
+  if (!gameState.kickHostVote) return;
+
+  const hostId = gameState.kickHostVote.targetId;
+
+  // Active players excluding the host
+  const activeNonHostPlayers = Object.values(gameState.players).filter(
+    (p) => !p.isBankrupt && p.id !== hostId
+  );
+  const totalVoting = activeNonHostPlayers.length;
+
+  if (totalVoting === 0) {
+    // No other players to vote, auto approve
+    gameState.hostKickedPending = true;
+    const hostPlayer = gameState.players[hostId];
+    
+    // Process bankruptcy for host
+    const bkResult = declareBankruptcy(gameState, hostId);
+    if (bkResult.ok) {
+      events.push(...bkResult.events);
+    }
+
+    events.push(evt(
+      EVENT_TYPES.KICK_HOST_APPROVED,
+      { targetId: hostId, username: hostPlayer ? hostPlayer.username : 'Host' },
+      `🎉 Host kicked by unanimous vote!`
+    ));
+    gameState.kickHostVote = null;
+    return;
+  }
+
+  // Majority of active non-host players required
+  const majorityNeeded = Math.floor(totalVoting / 2) + 1;
+
+  let acceptsCount = 0;
+  let rejectsCount = 0;
+
+  activeNonHostPlayers.forEach((p) => {
+    const vote = gameState.kickHostVote.votes[p.id];
+    if (vote === true) {
+      acceptsCount++;
+    } else if (vote === false) {
+      rejectsCount++;
+    }
+  });
+
+  if (acceptsCount >= majorityNeeded) {
+    // Approved!
+    gameState.hostKickedPending = true;
+    const hostPlayer = gameState.players[hostId];
+    
+    // Process bankruptcy for host
+    const bkResult = declareBankruptcy(gameState, hostId);
+    if (bkResult.ok) {
+      events.push(...bkResult.events);
+    }
+
+    events.push(evt(
+      EVENT_TYPES.KICK_HOST_APPROVED,
+      { targetId: hostId, username: hostPlayer ? hostPlayer.username : 'Host' },
+      `🎉 Host kicked by majority vote!`
+    ));
+
+    gameState.kickHostVote = null; // Clear vote state
+  } else if (rejectsCount >= (totalVoting - majorityNeeded + 1)) {
     // Rejected! (impossible to reach majority of accepts)
     events.push(evt(
-      EVENT_TYPES.END_GAME_VOTE_REJECTED,
+      EVENT_TYPES.KICK_HOST_VOTE_REJECTED,
       {},
-      `❌ End game rejected`
+      `❌ Vote to kick host rejected`
     ));
-    gameState.endGameVote = null; // Clear vote state
+    gameState.kickHostVote = null; // Clear vote state
   }
 };
 
@@ -2560,6 +2810,8 @@ module.exports = {
   declareBankruptcy,
   requestEndGame,
   voteEndGame,
+  requestKickHost,
+  voteKickHost,
 
   // Trading
   initiateTrade,
@@ -2571,6 +2823,7 @@ module.exports = {
   placeBid,
   passAuction,
   auctionProperty,
+  getPlayerRankingData,
 
   // Utilities (exported for testing)
   fmt,

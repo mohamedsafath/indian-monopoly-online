@@ -10,11 +10,7 @@
  *   showReady {boolean}  — show ready badge (lobby mode)
  */
 
-const TOKENS = ['🚗','🐘','🚆','👑','🛺','🐅','⚓','🎯'];
-const COLORS  = [
-  '#e74c3c','#3498db','#2ecc71','#f39c12',
-  '#9b59b6','#1abc9c','#e67e22','#34495e',
-];
+import { PLAYER_TOKENS, PLAYER_COLORS } from '../../utils/boardLayout';
 
 export default function PlayerCard({
   player,
@@ -23,8 +19,10 @@ export default function PlayerCard({
   showReady = true,
   index     = 0,
 }) {
-  const token = TOKENS[index % TOKENS.length];
-  const color = COLORS[index % COLORS.length];
+  const token = player.token || PLAYER_TOKENS[index % PLAYER_TOKENS.length];
+  const tokenIdx = PLAYER_TOKENS.indexOf(token);
+  const colorIdx = tokenIdx !== -1 ? tokenIdx : index;
+  const color = PLAYER_COLORS[colorIdx % PLAYER_COLORS.length];
 
   const connected = player.connected !== false;
 

@@ -1,14 +1,15 @@
 /**
  * frontend/src/pages/Home.jsx
  *
- * Monopoly India landing page.
+ * Monopoly India Room Management page.
  * Aesthetic: Indian festive luxury — deep jewel tones, gold ornamental motifs,
  * bold serif typography, saffron + emerald + crimson palette.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import socketService from '@/services/socketService';
+import RuleBookModal from '@/components/RuleBookModal';
 
 // ── Decorative SVG border motif (rangoli-inspired geometric) ────────────────
 function OrnamentialBorder({ className = '' }) {
@@ -60,7 +61,7 @@ function CityStrip() {
 }
 
 // ── Input component ──────────────────────────────────────────────────────────
-function GoldInput({ placeholder, value, onChange, maxLength = 20, type = 'text' }) {
+function GoldInput({ placeholder, value, onChange, maxLength = 20, type = 'text', disabled = false }) {
   return (
     <input
       type={type}
@@ -68,8 +69,9 @@ function GoldInput({ placeholder, value, onChange, maxLength = 20, type = 'text'
       value={value}
       onChange={e => onChange(e.target.value)}
       maxLength={maxLength}
+      disabled={disabled}
       autoComplete="off"
-      className="w-full px-4 py-3 rounded-lg text-sm outline-none transition-all duration-200"
+      className="w-full px-4 py-3 rounded-lg text-sm outline-none transition-all duration-200 disabled:opacity-50"
       style={{
         background: 'rgba(255,255,255,0.04)',
         border: '1px solid rgba(212,175,55,0.25)',
@@ -132,31 +134,72 @@ function Card({ children, title }) {
 // ── Main page ────────────────────────────────────────────────────────────────
 export default function Home() {
   const navigate = useNavigate();
+  const [showRuleBook, setShowRuleBook] = useState(false);
 
-  // Create room state
-  const [createUsername, setCreateUsername] = useState('');
+  // Authenticated User profile from local session
+  const [googleUser, setGoogleUser] = useState(() => {
+    try {
+      const stored = localStorage.getItem('mi_google_user');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Create room state (pre-filled and locked)
+  const [createUsername, setCreateUsername] = useState(googleUser ? googleUser.username : '');
   const [createLoading,  setCreateLoading]  = useState(false);
   const [createError,    setCreateError]    = useState('');
 
-  // Join room state
-  const [joinUsername, setJoinUsername] = useState('');
+  // Join room state (pre-filled and locked)
+  const [joinUsername, setJoinUsername] = useState(googleUser ? googleUser.username : '');
   const [joinCode,     setJoinCode]     = useState('');
   const [joinLoading,  setJoinLoading]  = useState(false);
   const [joinError,    setJoinError]    = useState('');
+  const [joinAsSpectator, setJoinAsSpectator] = useState(false);
+
+  // Update room states if googleUser updates (run on mount, but avoid overwriting active typing)
+  useEffect(() => {
+    if (googleUser && !createUsername && !joinUsername) {
+      setCreateUsername(googleUser.username);
+      setJoinUsername(googleUser.username);
+    }
+  }, [googleUser]);
+
+  const handleNameChange = (newName) => {
+    const trimmed = newName.slice(0, 20);
+    setCreateUsername(trimmed);
+    setJoinUsername(trimmed);
+
+    if (googleUser && googleUser.isGuest) {
+      const updatedUser = { ...googleUser, username: trimmed };
+      localStorage.setItem('mi_google_user', JSON.stringify(updatedUser));
+      setGoogleUser(updatedUser);
+    }
+  };
+
+  const handleSignOut = () => {
+    localStorage.removeItem('mi_google_user');
+    setGoogleUser(null);
+    setCreateUsername('');
+    setJoinUsername('');
+    navigate('/');
+  };
 
   // ── Create room ────────────────────────────────────────────────────────────
   const handleCreate = async () => {
     const name = createUsername.trim();
     if (!name) return setCreateError('Please enter your name');
-    if (name.length < 2) return setCreateError('Name must be at least 2 characters');
     setCreateError('');
     setCreateLoading(true);
     try {
-      const { room, playerId } = await socketService.createRoom(name);
+      const pId = googleUser ? googleUser.playerId : undefined;
+      const { room, playerId } = await socketService.createRoom(name, pId);
       // Persist identity for reconnect
       sessionStorage.setItem('mi_playerId',  playerId);
       sessionStorage.setItem('mi_roomCode',  room.code);
       sessionStorage.setItem('mi_username',  name);
+      sessionStorage.setItem('mi_isSpectator', 'false');
       navigate(`/lobby/${room.code}`);
     } catch (err) {
       setCreateError(err.message || 'Failed to create room');
@@ -166,6 +209,29 @@ export default function Home() {
   };
 
   // ── Join room ──────────────────────────────────────────────────────────────
+  const handleJoinCodeChange = (val) => {
+    let processed = val.trim();
+    // If it looks like a URL/link, parse it
+    if (processed.includes('/') || processed.includes(':') || processed.length > 6) {
+      const match = processed.match(/\/(?:lobby|game|results)\/([A-Za-z0-9]{6})/i);
+      if (match) {
+        processed = match[1];
+      } else {
+        const parts = processed.split('/');
+        const lastPart = parts[parts.length - 1].split('?')[0].split('#')[0];
+        if (lastPart.length === 6 && /^[A-Za-z0-9]+$/.test(lastPart)) {
+          processed = lastPart;
+        }
+      }
+    }
+    // Limit to 6 characters if not a URL / after extraction
+    if (!processed.includes('/') && !processed.includes(':')) {
+      processed = processed.slice(0, 6);
+    }
+    setJoinCode(processed.toUpperCase());
+    setJoinError('');
+  };
+
   const handleJoin = async () => {
     const name = joinUsername.trim();
     const code = joinCode.trim().toUpperCase();
@@ -174,11 +240,18 @@ export default function Home() {
     setJoinError('');
     setJoinLoading(true);
     try {
-      const { room, playerId } = await socketService.joinRoom(code, name);
+      const pId = googleUser ? googleUser.playerId : undefined;
+      const { room, playerId, isSpectator } = await socketService.joinRoom(code, name, pId, joinAsSpectator);
       sessionStorage.setItem('mi_playerId', playerId);
       sessionStorage.setItem('mi_roomCode', room.code);
       sessionStorage.setItem('mi_username', name);
-      navigate(`/lobby/${room.code}`);
+      sessionStorage.setItem('mi_isSpectator', String(Boolean(isSpectator || joinAsSpectator)));
+      
+      if (room.status === 'playing') {
+        navigate(`/game/${room.code}`);
+      } else {
+        navigate(`/lobby/${room.code}`);
+      }
     } catch (err) {
       setJoinError(err.message || 'Failed to join room');
     } finally {
@@ -239,17 +312,77 @@ export default function Home() {
           Build empires. Bankrupt your friends.
         </p>
 
-        {/* Cards container */}
+        {/* Verified User profile card (Always authenticated due to AuthGuard) */}
+        {googleUser && (
+          <div className="w-full max-w-lg mb-6 p-5 rounded-2xl flex items-center justify-between gap-4"
+               style={{ background: 'linear-gradient(135deg, rgba(212,175,55,0.08) 0%, rgba(255,255,255,0.02) 100%)',
+                        border: '1.5px solid rgba(212,175,55,0.4)',
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.45)' }}>
+            <div className="flex items-center gap-4">
+              <img
+                src={googleUser.avatar}
+                alt={googleUser.username}
+                className="w-14 h-14 rounded-full border border-yellow-500/50 bg-black/30"
+              />
+              <div className="flex flex-col gap-1">
+                <span className="font-bold flex items-center gap-1.5" style={{ color: '#fff', fontSize: 15, fontFamily: "'DM Sans', sans-serif" }}>
+                  👤 {googleUser.username}
+                  <span style={{ fontSize: 9, fontWeight: 900, background: 'rgba(212,175,55,0.15)', border: '1px solid rgba(212,175,55,0.3)', color: '#fde68a', padding: '1px 5px', borderRadius: 4, textTransform: 'uppercase' }}>
+                    Lv {googleUser.level}
+                  </span>
+                </span>
+                <span className="text-[10px]" style={{ color: 'rgba(156,163,175,0.5)', fontFamily: "'DM Sans', sans-serif" }}>
+                  {googleUser.isGuest ? '👤 Transient Guest Session' : googleUser.email}
+                </span>
+                <div className="flex gap-3 text-[10px] mt-1 text-yellow-500/80 font-bold" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+                  <span>🏆 Wins: {googleUser.wins}</span>
+                  <span>🎲 Games: {googleUser.games}</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => navigate(`/profile/${googleUser.playerId}`)}
+                className="px-3.5 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer text-yellow-500 bg-yellow-500/5 border border-yellow-500/25 hover:bg-yellow-500/10"
+                style={{ fontFamily: "'DM Sans', sans-serif" }}
+              >
+                👁️ View Profile
+              </button>
+              <button
+                onClick={handleSignOut}
+                className="px-3.5 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer"
+                style={{
+                  background: 'rgba(239, 68, 68, 0.12)',
+                  border: '1px solid rgba(239, 68, 68, 0.35)',
+                  color: '#f87171',
+                  fontFamily: "'DM Sans', sans-serif",
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.12)'}
+              >
+                Sign Out
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Room Management Container */}
         <div className="w-full max-w-lg flex flex-col gap-5">
 
           {/* ── Create Room ─────────────────────────────────── */}
           <Card title="✦ Create a New Room">
-            <GoldInput
-              placeholder="Your name (e.g. Arjun)"
-              value={createUsername}
-              onChange={v => { setCreateUsername(v); setCreateError(''); }}
-              maxLength={20}
-            />
+            <div className="flex flex-col gap-2">
+              <span className="text-[10px] font-bold text-gray-500 tracking-wider">
+                {googleUser?.isGuest ? '👤 Host Identity (Guest - Editable)' : '🏆 Host Identity (Verified)'}
+              </span>
+              <GoldInput
+                placeholder="Your name"
+                value={createUsername}
+                onChange={handleNameChange}
+                maxLength={20}
+                disabled={!googleUser?.isGuest}
+              />
+            </div>
             {createError && (
               <p className="text-xs text-red-400" style={{ fontFamily:"'DM Sans',sans-serif" }}>
                 {createError}
@@ -272,18 +405,52 @@ export default function Home() {
 
           {/* ── Join Room ────────────────────────────────────── */}
           <Card title="✦ Join with a Code">
+            <div className="flex flex-col gap-2">
+              <span className="text-[10px] font-bold text-gray-500 tracking-wider">
+                {googleUser?.isGuest ? '👤 Player Identity (Guest - Editable)' : '🏆 Player Identity (Verified)'}
+              </span>
+              <GoldInput
+                placeholder="Your name"
+                value={joinUsername}
+                onChange={handleNameChange}
+                maxLength={20}
+                disabled={!googleUser?.isGuest}
+              />
+            </div>
             <GoldInput
-              placeholder="Your name"
-              value={joinUsername}
-              onChange={v => { setJoinUsername(v); setJoinError(''); }}
-              maxLength={20}
-            />
-            <GoldInput
-              placeholder="Room code (e.g. MUMBAI)"
+              placeholder="Enter Room Code or Invite Link"
               value={joinCode}
-              onChange={v => { setJoinCode(v.toUpperCase()); setJoinError(''); }}
-              maxLength={6}
+              onChange={handleJoinCodeChange}
             />
+            <label className="flex items-center gap-2.5 cursor-pointer mt-1 mb-2 select-none group">
+              <input
+                type="checkbox"
+                checked={joinAsSpectator}
+                onChange={e => setJoinAsSpectator(e.target.checked)}
+                className="sr-only"
+              />
+              <div
+                className="w-5 h-5 rounded flex items-center justify-center transition-all duration-200"
+                style={{
+                  background: joinAsSpectator ? 'rgba(212,175,55,0.2)' : 'rgba(255,255,255,0.04)',
+                  border: joinAsSpectator ? '1.5px solid #d4af37' : '1px solid rgba(212,175,55,0.25)',
+                  boxShadow: joinAsSpectator ? '0 0 8px rgba(212,175,55,0.25)' : 'none',
+                }}
+              >
+                {joinAsSpectator && (
+                  <span className="text-xs text-yellow-500 font-bold">✓</span>
+                )}
+              </div>
+              <span
+                className="text-xs font-semibold tracking-wider transition-colors duration-200"
+                style={{
+                  color: joinAsSpectator ? '#f59e0b' : 'rgba(209,213,219,0.7)',
+                  fontFamily: "'DM Sans', sans-serif",
+                }}
+              >
+                👁️ Join as Spectator
+              </span>
+            </label>
             {joinError && (
               <p className="text-xs text-red-400" style={{ fontFamily:"'DM Sans',sans-serif" }}>
                 {joinError}
@@ -295,11 +462,37 @@ export default function Home() {
           </Card>
         </div>
 
+        <button
+          onClick={() => setShowRuleBook(true)}
+          className="mt-6 text-xs font-bold uppercase tracking-widest px-4 py-2.5 rounded-lg transition-all duration-200 cursor-pointer"
+          style={{
+            background: 'rgba(212,175,55,0.06)',
+            color: '#f59e0b',
+            border: '1px solid rgba(212,175,55,0.25)',
+            fontFamily: "'DM Sans', sans-serif",
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = 'rgba(212,175,55,0.12)';
+            e.currentTarget.style.borderColor = 'rgba(212,175,55,0.55)';
+            e.currentTarget.style.boxShadow = '0 0 12px rgba(212, 175, 55, 0.15)';
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = 'rgba(212,175,55,0.06)';
+            e.currentTarget.style.borderColor = 'rgba(212,175,55,0.25)';
+            e.currentTarget.style.boxShadow = 'none';
+          }}
+        >
+          📜 View Rule Book
+        </button>
+
         {/* Footer note */}
         <p className="mt-10 text-xs text-center"
            style={{ color:'rgba(156,163,175,0.3)', fontFamily:"'DM Sans',sans-serif" }}>
           2–8 players · Indian cities · Play with friends
         </p>
+
+        {/* Rule Book Modal */}
+        <RuleBookModal isOpen={showRuleBook} onClose={() => setShowRuleBook(false)} />
       </main>
 
       <CityStrip />

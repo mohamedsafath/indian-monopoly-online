@@ -163,20 +163,6 @@ export const DiceArena = React.memo(function DiceArena({
           🎲 Roll
         </button>
       )}
-
-      {/* Pending action hint */}
-      {pendingAction === 'buy_decision' && isMyTurn && (
-        <div style={{
-          fontSize:    10,
-          color:       '#f59e0b',
-          textAlign:   'center',
-          fontWeight:  600,
-          letterSpacing: '0.04em',
-          animation:   'tokenGlow 1.5s ease-in-out infinite',
-        }}>
-          Buy or Auction?
-        </div>
-      )}
     </div>
   );
 });

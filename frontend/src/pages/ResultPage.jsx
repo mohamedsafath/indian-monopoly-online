@@ -10,6 +10,57 @@ export default function ResultPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Feedback states
+  const [rating, setRating] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
+  const [category, setCategory] = useState('');
+  const [comment, setComment] = useState('');
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+  const [feedbackError, setFeedbackError] = useState('');
+
+  const handleFeedbackSubmit = async (e) => {
+    e.preventDefault();
+    if (rating === 0) {
+      return setFeedbackError('Please select a star rating.');
+    }
+    if (!category) {
+      return setFeedbackError('Please select a feedback category.');
+    }
+    
+    setFeedbackLoading(true);
+    setFeedbackError('');
+    try {
+      const stored = localStorage.getItem('mi_google_user');
+      const user = stored ? JSON.parse(stored) : { playerId: 'guest', username: 'Guest' };
+      
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5001';
+      const res = await fetch(`${BACKEND_URL}/api/feedback/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roomCode,
+          playerId: user.playerId,
+          username: user.username,
+          email: user.email || '',
+          rating,
+          category,
+          comment
+        })
+      });
+      
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Submission failed');
+      }
+      setFeedbackSubmitted(true);
+    } catch (err) {
+      setFeedbackError(err.message || 'Failed to submit feedback. Try again.');
+    } finally {
+      setFeedbackLoading(false);
+    }
+  };
+
   useEffect(() => {
     // Initial state fetch
     socketService.getRoomState()
@@ -38,6 +89,82 @@ export default function ResultPage() {
       socket.off('game-updated', handleGameUpdated);
     };
   }, [roomCode]);
+
+  // Update persistent Google Auth statistics once upon game completion
+  useEffect(() => {
+    if (!gameState || gameState.status !== 'finished') return;
+    
+    try {
+      const stored = localStorage.getItem('mi_google_user');
+      if (stored) {
+        const user = JSON.parse(stored);
+        const myIdInGame = sessionStorage.getItem('mi_playerId');
+        
+        // Find if this player is in the rankings
+        const myRank = gameState.ranking?.find(r => r.playerId === myIdInGame);
+        if (myRank) {
+          // Check if we already registered this match outcome to prevent double counts
+          const gameId = gameState.roomId || roomCode;
+          const processedKey = `mi_processed_game_${gameId}`;
+          const alreadyProcessed = localStorage.getItem(processedKey);
+          
+          if (!alreadyProcessed) {
+            localStorage.setItem(processedKey, 'true');
+            
+            const isWinner = gameState.winnerId === myIdInGame;
+            user.games = (user.games ?? 0) + 1;
+            if (isWinner) {
+              user.wins = (user.wins ?? 0) + 1;
+            } else {
+              user.losses = (user.losses ?? 0) + 1;
+            }
+            
+            // Increment lifetime metrics from final match stats
+            user.loansTaken = (user.loansTaken ?? 0) + (myRank.loansTaken ?? 0);
+            user.propertiesPurchased = (user.propertiesPurchased ?? 0) + (myRank.propertiesPurchased ?? 0);
+            user.totalNetWorthEarned = (user.totalNetWorthEarned ?? 0) + (myRank.netWorth ?? 0);
+            user.propertiesMortgaged = (user.propertiesMortgaged ?? 0) + (myRank.propertiesMortgaged ?? 0);
+            user.propertiesRepossessed = (user.propertiesRepossessed ?? 0) + (myRank.propertiesRepossessed ?? 0);
+            user.auctionsWon = (user.auctionsWon ?? 0) + (myRank.auctionsWon ?? 0);
+            user.rentPaid = (user.rentPaid ?? 0) + (myRank.rentPaid ?? 0);
+            user.rentEarned = (user.rentEarned ?? 0) + (myRank.rentEarned ?? 0);
+            user.bankruptcies = (user.bankruptcies ?? 0) + (myRank.isBankrupt ? 1 : 0);
+
+            // Recalculate level
+            user.level = Math.floor((user.wins ?? 0) * 0.3) + 1;
+            
+            localStorage.setItem('mi_google_user', JSON.stringify(user));
+
+            // Sync updated stats to persistent backend server database
+            if (!user.isGuest) {
+              const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5001';
+              fetch(`${BACKEND_URL}/api/auth/update-stats`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  playerId: user.playerId,
+                  wins: user.wins,
+                  games: user.games,
+                  losses: user.losses,
+                  loansTaken: user.loansTaken,
+                  propertiesPurchased: user.propertiesPurchased,
+                  totalNetWorthEarned: user.totalNetWorthEarned,
+                  propertiesMortgaged: user.propertiesMortgaged,
+                  propertiesRepossessed: user.propertiesRepossessed,
+                  auctionsWon: user.auctionsWon,
+                  rentPaid: user.rentPaid,
+                  rentEarned: user.rentEarned,
+                  bankruptcies: user.bankruptcies
+                })
+              }).catch(e => console.error("Failed to sync stats to server:", e));
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Failed to update user stats:", e);
+    }
+  }, [gameState, roomCode]);
 
   // Determine winner and rank players
   const sortedRanking = useMemo(() => {
@@ -305,6 +432,256 @@ export default function ResultPage() {
               })}
             </tbody>
           </table>
+        </div>
+
+        {/* DETAILED STATS SECTION */}
+        <h2 style={{
+          fontSize: 18,
+          fontWeight: 800,
+          color: '#cbd5e1',
+          marginTop: 48,
+          marginBottom: 20,
+          letterSpacing: '0.05em',
+          textTransform: 'uppercase',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          paddingBottom: 10,
+        }}>
+          📈 Player Performance & Statistics
+        </h2>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+          gap: 24,
+          marginBottom: 48,
+        }}>
+          {sortedRanking.map((row) => (
+            <div
+              key={row.playerId}
+              style={{
+                background: 'rgba(2, 6, 23, 0.45)',
+                border: row.playerId === winner?.playerId ? '1.5px solid rgba(212, 175, 55, 0.35)' : '1px solid rgba(255, 255, 255, 0.06)',
+                borderRadius: 20,
+                padding: '24px',
+                boxShadow: '0 10px 30px rgba(0, 0, 0, 0.3)',
+                fontFamily: "'DM Sans', sans-serif",
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <span style={{ fontSize: 15, fontWeight: 800, color: row.playerId === winner?.playerId ? '#fde68a' : '#fff' }}>
+                  {row.username} {row.playerId === winner?.playerId ? '👑' : ''}
+                </span>
+                <span style={{
+                  padding: '3px 8px',
+                  borderRadius: 12,
+                  background: row.isBankrupt ? 'rgba(239, 68, 68, 0.15)' : 'rgba(34, 197, 94, 0.15)',
+                  border: row.isBankrupt ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(34, 197, 94, 0.3)',
+                  color: row.isBankrupt ? '#f87171' : '#4ade80',
+                  fontSize: 9,
+                  fontWeight: 800,
+                  textTransform: 'uppercase',
+                }}>
+                  {row.isBankrupt ? 'Eliminated' : 'Active'}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {/* Net Worth */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderBottom: '1px dashed rgba(255,255,255,0.05)', paddingBottom: 6 }}>
+                  <span style={{ color: '#94a3b8' }}>Net Worth</span>
+                  <span style={{ fontWeight: 800, color: '#fbbf24' }}>₹{row.netWorth.toLocaleString('en-IN')}</span>
+                </div>
+
+                {/* Cash */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderBottom: '1px dashed rgba(255,255,255,0.05)', paddingBottom: 6 }}>
+                  <span style={{ color: '#94a3b8' }}>Cash Balance</span>
+                  <span style={{ fontWeight: 700, color: '#cbd5e1' }}>₹{row.cash.toLocaleString('en-IN')}</span>
+                </div>
+
+                {/* Properties Owned */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderBottom: '1px dashed rgba(255,255,255,0.05)', paddingBottom: 6 }}>
+                  <span style={{ color: '#94a3b8' }}>Properties Owned</span>
+                  <span style={{ fontWeight: 700, color: '#cbd5e1' }}>{row.propertiesOwnedCount} properties</span>
+                </div>
+
+                {/* Rent Collected */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderBottom: '1px dashed rgba(255,255,255,0.05)', paddingBottom: 6 }}>
+                  <span style={{ color: '#94a3b8' }}>Rent Collected</span>
+                  <span style={{ fontWeight: 700, color: '#34d399' }}>₹{(row.rentCollected ?? 0).toLocaleString('en-IN')}</span>
+                </div>
+
+                {/* Loans Taken */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, borderBottom: '1px dashed rgba(255,255,255,0.05)', paddingBottom: 6 }}>
+                  <span style={{ color: '#94a3b8' }}>Loans Taken</span>
+                  <span style={{ fontWeight: 700, color: '#f87171' }}>{row.loansTaken ?? 0}</span>
+                </div>
+
+                {/* Properties Repossessed */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                  <span style={{ color: '#94a3b8' }}>Repossessed Assets</span>
+                  <span style={{ fontWeight: 700, color: '#f87171' }}>{row.propertiesRepossessed ?? 0}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* 💬 MATCH FEEDBACK CARD */}
+        <div style={{
+          background: 'rgba(2, 6, 23, 0.45)',
+          border: '1.5px solid rgba(212, 175, 55, 0.2)',
+          boxShadow: '0 10px 30px rgba(0, 0, 0, 0.3)',
+          borderRadius: 20,
+          padding: '28px',
+          marginBottom: 48,
+          fontFamily: "'DM Sans', sans-serif",
+          position: 'relative'
+        }}>
+          {feedbackSubmitted ? (
+            <div style={{ textAlign: 'center', padding: '20px 0' }}>
+              <span style={{ fontSize: 48, display: 'block', marginBottom: 12 }}>🎉</span>
+              <h3 style={{ fontSize: 18, fontWeight: 800, color: '#fde68a', fontFamily: "'Playfair Display', serif", marginBottom: 6 }}>
+                Feedback Submitted!
+              </h3>
+              <p style={{ fontSize: 13, color: '#94a3b8' }}>
+                Thank you for helping us improve Monopoly India. Your review has been recorded.
+              </p>
+            </div>
+          ) : (
+            <form onSubmit={handleFeedbackSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 800, color: '#fde68a', fontFamily: "'Playfair Display', serif", marginBottom: 4 }}>
+                  💬 Rate Your Match
+                </h3>
+                <p style={{ fontSize: 12, color: '#94a3b8' }}>
+                  Please share your feedback so we can improve the game mechanics and user experience.
+                </p>
+              </div>
+
+              {/* Star Rating Selectors */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '8px 0' }}>
+                {[1, 2, 3, 4, 5].map((star) => {
+                  const isActive = (hoverRating || rating) >= star;
+                  return (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setRating(star)}
+                      onMouseEnter={() => setHoverRating(star)}
+                      onMouseLeave={() => setHoverRating(star)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        fontSize: 28,
+                        color: isActive ? '#fbbf24' : 'rgba(255,255,255,0.15)',
+                        cursor: 'pointer',
+                        padding: 0,
+                        transition: 'color 0.1s, transform 0.1s',
+                        filter: isActive ? 'drop-shadow(0 0 8px rgba(251,191,36,0.5))' : 'none'
+                      }}
+                    >
+                      ★
+                    </button>
+                  );
+                })}
+                {rating > 0 && (
+                  <span style={{ fontSize: 11, fontWeight: 800, color: '#fbbf24', marginLeft: 8, textTransform: 'uppercase' }}>
+                    {rating === 1 ? 'Poor' : rating === 2 ? 'Fair' : rating === 3 ? 'Good' : rating === 4 ? 'Very Good' : 'Excellent!'}
+                  </span>
+                )}
+              </div>
+
+              {/* Category Selectors */}
+              <div>
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#cbd5e1', textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>
+                  Select Feedback Category
+                </span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {['Gameplay Rules', 'AI Bots Balance', 'UI/UX Design', 'Connection & Sockets', 'Other'].map((cat) => {
+                    const isSelected = category === cat;
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setCategory(cat)}
+                        style={{
+                          padding: '6px 14px',
+                          borderRadius: 20,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          background: isSelected ? 'rgba(212,175,55,0.15)' : 'rgba(255,255,255,0.03)',
+                          border: isSelected ? '1.5px solid #d4af37' : '1.5px solid rgba(255,255,255,0.08)',
+                          color: isSelected ? '#fde68a' : '#94a3b8',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        {cat}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Comment Textbox */}
+              <div>
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#cbd5e1', textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>
+                  Write Your Review (Optional)
+                </span>
+                <textarea
+                  value={comment}
+                  onChange={e => setComment(e.target.value)}
+                  placeholder="What did you like or dislike? How can we make the board game more entertaining?"
+                  maxLength={400}
+                  rows={3}
+                  disabled={feedbackLoading}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    borderRadius: 10,
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(212,175,55,0.2)',
+                    color: '#f3f4f6',
+                    fontSize: 12,
+                    outline: 'none',
+                    fontFamily: "'DM Sans', sans-serif",
+                    resize: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              {feedbackError && (
+                <p style={{ fontSize: 11, color: '#f87171', fontWeight: 600, margin: 0, textAlign: 'center' }}>
+                  ⚠️ {feedbackError}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={feedbackLoading}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  borderRadius: 10,
+                  fontSize: 12,
+                  fontWeight: 800,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                  cursor: 'pointer',
+                  border: 'none',
+                  background: feedbackLoading
+                    ? 'rgba(180,83,9,0.3)'
+                    : 'linear-gradient(135deg, #d97706 0%, #f59e0b 50%, #d97706 100%)',
+                  color: '#030712',
+                  boxShadow: '0 4px 15px rgba(245,158,11,0.25)',
+                  transition: 'all 0.2s'
+                }}
+              >
+                {feedbackLoading ? 'Submitting Review…' : 'Submit Review'}
+              </button>
+            </form>
+          )}
         </div>
 
         {/* Footer Actions */}
