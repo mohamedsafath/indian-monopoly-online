@@ -1,3 +1,4 @@
+require('dotenv').config();
 const mongoose = require('mongoose');
 const { connectDB, saveRoom, deleteRoom, loadActiveRooms, getIsDbActive } = require('./socket/roomModel');
 

@@ -5,6 +5,7 @@
  * and admin validation.
  */
 
+require('dotenv').config();
 const { connectDB, getIsDbActive } = require('./socket/roomModel');
 const { addFeedback, getAllFeedback } = require('./socket/feedbackModel');
 const { isAdmin } = require('./socket/userModel');

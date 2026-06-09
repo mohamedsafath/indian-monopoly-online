@@ -278,10 +278,10 @@ const adminRouter = express.Router();
 // Verify administrator privilege middleware
 const verifyAdmin = (req, res, next) => {
   try {
-    const adminEmail = req.headers["x-admin-email"];
-    const { isAdmin } = require("./socket/userModel");
-    if (!isAdmin(adminEmail)) {
-      return res.status(403).json({ ok: false, error: "Access Denied: Admin privileges required." });
+    const secret = req.headers["x-admin-secret"];
+    const expectedSecret = process.env.ADMIN_SECRET || "SafathSruthiAdminSecret2026!";
+    if (!secret || secret !== expectedSecret) {
+      return res.status(403).json({ ok: false, error: "Access Denied: Invalid admin secret." });
     }
     next();
   } catch (err) {
