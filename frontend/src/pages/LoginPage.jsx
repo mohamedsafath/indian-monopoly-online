@@ -388,8 +388,33 @@ export default function LoginPage() {
         </div>
 
         {/* Footer info */}
-        <p style={{ fontSize: 11, color: '#475569', marginTop: 40 }}>
-          Indian Festive Edition • Built with Antigravity SDK
+        <p style={{ fontSize: 11, color: '#475569', marginTop: 40, display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <span>Indian Festive Edition</span>
+          <span>•</span>
+          <span>Created by Mohamed Safath</span>
+          <span>(</span>
+          <a 
+            href="https://www.linkedin.com/in/mohamed-safath/" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            style={{ color: '#a8c7fa', textDecoration: 'none', transition: 'color 0.2s' }}
+            onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline'; e.currentTarget.style.color = '#c2e7ff'; }}
+            onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none'; e.currentTarget.style.color = '#a8c7fa'; }}
+          >
+            LinkedIn
+          </a>
+          <span>/</span>
+          <a 
+            href="https://www.instagram.com/justt.zafathh/" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            style={{ color: '#a8c7fa', textDecoration: 'none', transition: 'color 0.2s' }}
+            onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline'; e.currentTarget.style.color = '#c2e7ff'; }}
+            onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none'; e.currentTarget.style.color = '#a8c7fa'; }}
+          >
+            Instagram
+          </a>
+          <span>)</span>
         </p>
       </div>
     );
