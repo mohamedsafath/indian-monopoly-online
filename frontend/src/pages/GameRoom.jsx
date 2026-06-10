@@ -1148,6 +1148,25 @@ export default function GameRoom() {
         :root {
           --board-height: min(100vw - 16px, 52vh);
           --board-width: min(100vw - 16px, 52vh);
+          --board-padding: 6px;
+          --deck-width: 135px;
+          --deck-height: 175px;
+          --deck-bottom-offset: 32px;
+          --deck-stack-height: 120px;
+          --deck-top-card-height: 122px;
+          --deck-icon-size: 36px;
+          --deck-label-size: 12px;
+          --deck-bottom-label-size: 10px;
+          --deck-gap: 6px;
+          --tile-name-vertical: 9.5px;
+          --tile-name-horizontal-2line: 9px;
+          --tile-name-horizontal-1line: 10.5px;
+          --tile-price-size: 14px;
+          --tile-price-strip-size: 12px;
+          --tile-icon-prop-size: 14px;
+          --tile-icon-other-size: 18px;
+          --tile-house-size: 8px;
+          --tile-hotel-size: 10px;
         }
         
         @media (min-width: 1024px) {
@@ -1156,33 +1175,59 @@ export default function GameRoom() {
             --board-height: min(100vw - 580px, 100vh - 65px);
           }
         }
+
+        @media (max-width: 768px) {
+          :root {
+            --board-width: min(100vw - 8px, 76vh);
+            --board-height: min(100vw - 8px, 76vh);
+            --board-padding: 2px;
+            --deck-width: 70px;
+            --deck-height: 90px;
+            --deck-bottom-offset: 14px;
+            --deck-stack-height: 60px;
+            --deck-top-card-height: 62px;
+            --deck-icon-size: 18px;
+            --deck-label-size: 8px;
+            --deck-bottom-label-size: 7px;
+            --deck-gap: 2px;
+            --tile-name-vertical: 7.5px;
+            --tile-name-horizontal-2line: 7px;
+            --tile-name-horizontal-1line: 8px;
+            --tile-price-size: 9px;
+            --tile-price-strip-size: 8px;
+            --tile-icon-prop-size: 10px;
+            --tile-icon-other-size: 12px;
+            --tile-house-size: 5px;
+            --tile-hotel-size: 6px;
+          }
+        }
       `}</style>
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={dismissToast} />}
 
       {/* Top bar */}
-      <header className="flex items-center justify-between px-4 py-2.5 flex-shrink-0"
+      <header className="flex items-center justify-between px-4 py-1.5 md:py-2.5 flex-shrink-0"
         style={{ background:'rgba(0,0,0,0.65)', borderBottom:'1px solid rgba(212,175,55,0.1)', backdropFilter:'blur(12px)' }}>
-        <span className="font-black text-base"
+        <span className="font-black text-sm md:text-base"
           style={{ fontFamily:"'Playfair Display',serif", background:'linear-gradient(135deg,#d4af37,#fde68a,#d97706)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>
           Monopoly <em>India</em>
         </span>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 md:gap-3">
           {isMyTurn && (
-            <span className="text-xs font-bold px-3 py-1 rounded-full animate-pulse"
+            <span className="text-[10px] md:text-xs font-bold px-2 py-0.5 md:px-3 md:py-1 rounded-full animate-pulse"
               style={{ background:'rgba(34,197,94,0.18)', color:'#4ade80', border:'1px solid rgba(34,197,94,0.3)' }}>
               Your Turn
             </span>
           )}
           {gameState?.activeAuction && (
-            <span className="text-xs font-bold px-3 py-1 rounded-full"
+            <span className="text-[10px] md:text-xs font-bold px-2 py-0.5 md:px-3 md:py-1 rounded-full"
               style={{ background:'rgba(245,158,11,0.15)', color:'#fbbf24', border:'1px solid rgba(245,158,11,0.3)' }}>
               🔨 Auction
             </span>
           )}
           <button
             onClick={() => setShowRuleBook(true)}
-            className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+            className="hidden md:inline-block px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
             style={{
               background: 'rgba(212,175,55,0.08)',
               color: '#f59e0b',
@@ -1202,7 +1247,7 @@ export default function GameRoom() {
           </button>
           <button
             onClick={() => setShowPlayersModal(true)}
-            className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+            className="hidden md:inline-block px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
             style={{
               background: 'rgba(212,175,55,0.08)',
               color: '#f59e0b',
@@ -1224,6 +1269,7 @@ export default function GameRoom() {
           {gameState?.status === 'playing' && (
             <button
               onClick={() => setShowEndGameModal(true)}
+              className="hidden md:inline-block"
               style={{
                 padding: '4px 10px',
                 borderRadius: 8,
@@ -1263,7 +1309,7 @@ export default function GameRoom() {
               showToast?.('Lobby invite link copied to clipboard!', 'success');
             }}
             title="Click or copy to get lobby invite link"
-            className="text-[11px] font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg border hover:text-yellow-400 select-all"
+            className="text-[9px] md:text-[11px] font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer flex items-center gap-1 md:gap-1.5 px-2 py-1 md:px-3 md:py-1.5 rounded-lg border hover:text-yellow-400 select-all"
             style={{
               background: 'rgba(255,255,255,0.03)',
               borderColor: 'rgba(255,255,255,0.08)',
@@ -1405,7 +1451,7 @@ export default function GameRoom() {
         </aside>
 
         {/* Board */}
-        <main className="w-full h-[60vh] sm:h-[65vh] lg:h-auto lg:flex-1 flex-shrink-0 flex items-center justify-center p-2 lg:py-2 lg:px-4 lg:overflow-hidden mx-auto" 
+        <main className="w-full h-auto lg:h-auto lg:flex-1 flex-shrink-0 flex items-center justify-center p-1 lg:py-2 lg:px-4 lg:overflow-hidden mx-auto" 
               style={{ position:'relative', minWidth:0, width: 'var(--board-width, 100%)', height: 'var(--board-height, auto)' }}>
           <MonopolyBoard
             gameState={gameState}
@@ -1784,7 +1830,34 @@ export default function GameRoom() {
               <div className="flex flex-col gap-4 p-1">
                 {/* Players cards */}
                 <div>
-                  <h3 className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: 'rgba(212,175,55,0.5)' }}>Players</h3>
+                  <div className="flex justify-between items-center mb-2">
+                    <h3 className="text-xs font-bold uppercase tracking-widest" style={{ color: 'rgba(212,175,55,0.5)' }}>Players</h3>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setShowRuleBook(true)}
+                        className="px-2.5 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider bg-yellow-500/10 text-yellow-500 border border-yellow-500/25 transition-all active:scale-95 cursor-pointer"
+                        style={{ fontFamily: "'DM Sans', sans-serif" }}
+                      >
+                        📜 Rules
+                      </button>
+                      <button
+                        onClick={() => setShowPlayersModal(true)}
+                        className="px-2.5 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider bg-yellow-500/10 text-yellow-500 border border-yellow-500/25 transition-all active:scale-95 cursor-pointer"
+                        style={{ fontFamily: "'DM Sans', sans-serif" }}
+                      >
+                        👥 Manage
+                      </button>
+                      {gameState?.status === 'playing' && (
+                        <button
+                          onClick={() => setShowEndGameModal(true)}
+                          className="px-2.5 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider bg-red-500/10 text-red-400 border border-red-500/25 transition-all active:scale-95 cursor-pointer"
+                          style={{ fontFamily: "'DM Sans', sans-serif" }}
+                        >
+                          🛑 End Game
+                        </button>
+                      )}
+                    </div>
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {players.map((p, i) => (
                       <PlayerCard key={p.id} player={p} index={i} isCurrentTurn={p.id === currentPlayerId} isMe={p.id === myId}

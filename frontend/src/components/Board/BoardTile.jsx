@@ -105,7 +105,7 @@ function HouseRow({ houses, hotel, edge, groupColor }) {
     <div style={positionStyle}>
       {hotel ? (
         <div style={{
-          width: 10, height: 10, borderRadius: 2,
+          width: 'var(--tile-hotel-size, 10px)', height: 'var(--tile-hotel-size, 10px)', borderRadius: 2,
           background: '#ef4444',
           border: '0.5px solid #b91c1c',
           boxShadow: '0 0 8px rgba(239,68,68,0.95)',
@@ -113,7 +113,7 @@ function HouseRow({ houses, hotel, edge, groupColor }) {
       ) : (
         Array.from({ length: houses }).map((_, i) => (
           <div key={i} style={{
-            width: 8, height: 8, borderRadius: 2,
+            width: 'var(--tile-house-size, 8px)', height: 'var(--tile-house-size, 8px)', borderRadius: 2,
             background: '#22c55e',
             border: '0.5px solid #15803d',
             boxShadow: '0 0 6px rgba(34,197,94,0.9)',
@@ -160,8 +160,8 @@ export const BoardTile = React.memo(function BoardTile({
   }, [isVerticalEdge, tile]);
 
   const nameSize = isVerticalEdge
-    ? '9.5px'
-    : (displayLines.length > 1 ? '9px' : '10.5px');
+    ? 'var(--tile-name-vertical, 9.5px)'
+    : (displayLines.length > 1 ? 'var(--tile-name-horizontal-2line, 9px)' : 'var(--tile-name-horizontal-1line, 10.5px)');
 
   // Glow color for hover / active state
   const glowColor = ownerColor ?? groupColor ?? iconGlow ?? 'rgba(212,175,55,0.5)';
@@ -299,7 +299,7 @@ export const BoardTile = React.memo(function BoardTile({
           }}>
             {tile.price && (
               <span style={{
-                fontSize:   '12px',
+                fontSize:   'var(--tile-price-strip-size, 12px)',
                 fontWeight: 900,
                 color:      '#ffffff',
                 textTransform: 'uppercase',
@@ -341,7 +341,7 @@ export const BoardTile = React.memo(function BoardTile({
         <div style={contentStyle}>
           {/* Icon */}
           <div style={{
-            fontSize:   tile.type === 'property' ? 14 : 18,
+            fontSize:   tile.type === 'property' ? 'var(--tile-icon-prop-size, 14px)' : 'var(--tile-icon-other-size, 18px)',
             lineHeight: 1,
             flexShrink: 0,
             filter:     iconGlow ? `drop-shadow(0 0 5px ${iconGlow}70)` : 'none',
@@ -386,7 +386,7 @@ export const BoardTile = React.memo(function BoardTile({
           {/* Price (only render in content area if there's no color group strip) */}
           {tile.price && !groupColor && (
             <div style={{
-              fontSize:   14,
+              fontSize:   'var(--tile-price-size, 14px)',
               fontWeight: 900,
               color:      isMonopoly ? '#fbbf24' : 'rgba(212,175,55,0.85)',
               letterSpacing: '0.02em',
@@ -401,7 +401,7 @@ export const BoardTile = React.memo(function BoardTile({
           {/* Tax amount badge */}
           {tile.type === 'tax' && tile.amount && (
             <div style={{
-              fontSize: 13,
+              fontSize: 'var(--tile-price-size, 13px)',
               fontWeight: 800,
               color: '#f87171',
               letterSpacing: '0.02em',

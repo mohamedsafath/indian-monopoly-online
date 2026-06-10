@@ -59,6 +59,34 @@ const CARD_CSS = `
   0%,100% { opacity: 0.4; }
   50%      { opacity: 0.9; }
 }
+
+@media (max-width: 768px) {
+  .mobile-card-popup-container {
+    align-items: flex-end !important;
+  }
+  .mobile-card-popup-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-radius: 24px 24px 0 0 !important;
+    border-bottom: none !important;
+    border-left: none !important;
+    border-right: none !important;
+    padding: 24px 20px 32px !important;
+    margin-bottom: 0 !important;
+    animation: mobileCardSlideUp 0.35s cubic-bezier(0.34, 1.3, 0.64, 1) forwards !important;
+  }
+  .mobile-card-popup-card.leaving {
+    animation: mobileCardSlideDown 0.28s ease-in forwards !important;
+  }
+  @keyframes mobileCardSlideUp {
+    from { transform: translateY(100%); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  @keyframes mobileCardSlideDown {
+    from { transform: translateY(0); opacity: 1; }
+    to { transform: translateY(100%); opacity: 0; }
+  }
+}
 `;
 
 let cssInjected = false;
@@ -111,6 +139,7 @@ export function CardPopup({ card, onDismiss }) {
   return (
     <div
       onClick={dismiss}
+      className="mobile-card-popup-container"
       style={{
         position:       'fixed',
         inset:          0,
@@ -141,6 +170,7 @@ export function CardPopup({ card, onDismiss }) {
       {/* Card */}
       <div
         onClick={(e) => e.stopPropagation()}
+        className={`mobile-card-popup-card ${isLeaving ? 'leaving' : ''}`}
         style={{
           position:     'relative',
           width:        340,

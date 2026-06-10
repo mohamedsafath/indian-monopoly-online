@@ -142,8 +142,8 @@ function PhysicalDeck({
       onClick={canClick ? onClick : undefined}
       title={isGlowing ? (isMyTurn ? `Click to draw ${label} card` : `Waiting for ${playerName} to draw`) : label}
       style={{
-        width:        135,
-        height:       175,
+        width:        'var(--deck-width, 135px)',
+        height:       'var(--deck-height, 175px)',
         borderRadius: 16,
         background:   bgGrad,
         border:       `1.5px solid ${isGlowing ? accent : accent + '35'}`,
@@ -165,17 +165,17 @@ function PhysicalDeck({
         flexDirection:'column',
         justifyContent:'space-between',
         boxSizing:    'border-box',
-        padding:      '8px',
+        padding:      'var(--deck-gap, 6px)',
       }}
     >
       {/* Card stack illusion */}
       {[3, 2, 1].map((offset) => (
         <div key={offset} style={{
           position:    'absolute',
-          bottom:      offset * 4 + 32,
+          bottom:      `calc(${offset * 4}px + var(--deck-bottom-offset, 32px))`,
           left:        offset * 2 + 8,
           right:       offset * 2 + 8,
-          height:      120,
+          height:      'var(--deck-stack-height, 120px)',
           borderRadius: 12,
           background:  isGlowing
             ? `${accent}${['08','10','14'][offset - 1]}`
@@ -187,7 +187,7 @@ function PhysicalDeck({
       {/* Top card */}
       <div style={{
         position:     'relative',
-        height:       122,
+        height:       'var(--deck-top-card-height, 122px)',
         borderRadius: 12,
         background:   isGlowing
           ? `linear-gradient(135deg, ${accent}22, ${accent}10)`
@@ -197,15 +197,16 @@ function PhysicalDeck({
         flexDirection:'column',
         alignItems:   'center',
         justifyContent:'center',
-        gap:          6,
+        gap:          'var(--deck-gap, 6px)',
         animation:    isGlowing ? 'deckCardSlide 0.4s ease-out' : 'none',
       }}>
         <div style={{
-          fontSize: 36,
+          fontSize: 'var(--deck-icon-size, 36px)',
           filter:   isGlowing ? `drop-shadow(0 0 12px ${accent})` : 'none',
+          lineHeight: 1,
         }}>{icon}</div>
         <div style={{
-          fontSize:      12,
+          fontSize:      'var(--deck-label-size, 12px)',
           fontWeight:    900,
           letterSpacing: '0.15em',
           textTransform: 'uppercase',
@@ -218,7 +219,7 @@ function PhysicalDeck({
       {/* Bottom label bar */}
       <div style={{
         textAlign:     'center',
-        fontSize:      10,
+        fontSize:      'var(--deck-bottom-label-size, 10px)',
         fontWeight:    800,
         letterSpacing: '0.08em',
         color:         isGlowing ? accent : `${accent}60`,
@@ -226,7 +227,6 @@ function PhysicalDeck({
         paddingTop:    '4px',
       }}>
         {isGlowing
-
           ? (canClick ? '▶ Draw' : `⏳ ${playerName?.split(' ')[0] ?? '…'}`)
           : 'Draw Card'}
       </div>
@@ -498,7 +498,7 @@ export const MonopolyBoard = React.memo(function MonopolyBoard({
       <div style={{
         position: 'absolute', inset: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: 6,
+        padding: 'var(--board-padding, 6px)',
       }}>
         {/* Square aspect-ratio wrapper — visually dominates the screen */}
         <div style={{
