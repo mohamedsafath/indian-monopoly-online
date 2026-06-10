@@ -331,7 +331,7 @@ export default function GameRoom() {
   const [showBuildPanel, setShowBuildPanel] = useState(false);
   const [showLoanModal, setShowLoanModal] = useState(false);
   const [showRuleBook, setShowRuleBook] = useState(false);
-  const [activeTab,     setActiveTab]     = useState('lobby'); // 'lobby' | 'chat' | 'properties'
+  const [activeTab,     setActiveTab]     = useState('none'); // 'none' | 'lobby' | 'chat' | 'properties'
   
   // Advanced Chat states
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -1286,8 +1286,35 @@ export default function GameRoom() {
         </div>
       </header>
 
+      {/* Mobile compact horizontal player scroll bar */}
+      <div className="flex lg:hidden overflow-x-auto gap-2 px-3 py-2 flex-shrink-0 scrollbar-none" 
+           style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', background: 'rgba(0,0,0,0.2)' }}>
+        {players.map((p, idx) => {
+          const isCurrent = p.id === currentPlayerId;
+          const isMe = p.id === myId;
+          const token = p.token || PLAYER_TOKENS[idx % PLAYER_TOKENS.length];
+          return (
+            <div
+              key={p.id}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold flex-shrink-0 transition-all border"
+              style={{
+                borderColor: isCurrent ? '#f59e0b' : 'rgba(255,255,255,0.06)',
+                background: isCurrent ? 'rgba(245,158,11,0.08)' : 'rgba(255,255,255,0.02)',
+                color: isCurrent ? '#fbbf24' : '#d1d5db'
+              }}
+            >
+              <span>{token}</span>
+              <span className="truncate max-w-[80px]">{p.username}</span>
+              <span className="opacity-80">₹{Number(p.money ?? 0).toLocaleString('en-IN')}</span>
+              {isMe && <span className="text-[7px] px-1 py-0.2 rounded bg-yellow-500/15 text-yellow-500 font-bold uppercase ml-0.5">You</span>}
+              {p.isBankrupt && <span className="text-[7px] px-1 py-0.2 rounded bg-red-500/15 text-red-500 font-bold uppercase ml-0.5">☠</span>}
+            </div>
+          );
+        })}
+      </div>
+
       {/* Body */}
-      <div className="flex flex-col lg:flex-row flex-1 overflow-y-auto lg:overflow-hidden">
+      <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
 
         {/* Left sidebar */}
         <aside className="hidden lg:flex w-60 flex-col gap-0 flex-shrink-0 overflow-hidden"
@@ -1378,7 +1405,7 @@ export default function GameRoom() {
         </aside>
 
         {/* Board */}
-        <main className="w-full lg:flex-1 flex-shrink-0 flex items-center justify-center p-2 lg:py-2 lg:px-4 lg:overflow-hidden mx-auto" 
+        <main className="w-full h-[60vh] sm:h-[65vh] lg:h-auto lg:flex-1 flex-shrink-0 flex items-center justify-center p-2 lg:py-2 lg:px-4 lg:overflow-hidden mx-auto" 
               style={{ position:'relative', minWidth:0, width: 'var(--board-width, 100%)', height: 'var(--board-height, auto)' }}>
           <MonopolyBoard
             gameState={gameState}
@@ -1725,47 +1752,34 @@ export default function GameRoom() {
           </div>
         </aside>
 
-        {/* Mobile Tabbed Panels (only visible on mobile/tablet) */}
-        <div className="flex lg:hidden flex-col flex-1 p-3 gap-3 overflow-hidden" style={{ minHeight: '380px' }}>
-          {/* Tab Bar */}
-          <div className="flex gap-1 p-1 rounded-xl flex-shrink-0" style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(212,175,55,0.1)' }}>
-            <button
-              onClick={() => setActiveTab('lobby')}
-              className="flex-grow py-2 text-center rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer"
-              style={{
-                background: activeTab === 'lobby' ? 'rgba(212,175,55,0.12)' : 'transparent',
-                color: activeTab === 'lobby' ? '#f59e0b' : 'rgba(156,163,175,0.6)',
-                border: activeTab === 'lobby' ? '1px solid rgba(212,175,55,0.25)' : '1px solid transparent',
-              }}
+        {/* Mobile Slide-up Bottom Drawer Sheet (only visible on mobile/tablet) */}
+        <div 
+          className={`flex lg:hidden fixed inset-x-0 bottom-16 bg-[#0f0a05] border-t border-yellow-500/10 rounded-t-2xl z-40 flex-col p-4 gap-3 transition-transform duration-300 ease-out transform ${
+            activeTab !== 'none' ? 'translate-y-0' : 'translate-y-full'
+          }`}
+          style={{ 
+            height: '42vh', 
+            boxShadow: '0 -10px 40px rgba(0,0,0,0.85), inset 0 0 20px rgba(212,175,55,0.02)',
+            backdropFilter: 'blur(16px)'
+          }}
+        >
+          {/* Drawer Header & Close Button */}
+          <div className="flex items-center justify-between pb-1 flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+            <span className="text-xs font-black uppercase tracking-wider text-amber-500" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+              {activeTab === 'lobby' && '🎮 Match Lobby & Events'}
+              {activeTab === 'chat' && '💬 Live Chat'}
+              {activeTab === 'properties' && '🏠 Properties & Assets'}
+            </span>
+            <button 
+              onClick={() => setActiveTab('none')}
+              className="text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold cursor-pointer transition-all"
             >
-              🎮 Lobby & Play
-            </button>
-            <button
-              onClick={() => setActiveTab('chat')}
-              className="flex-grow py-2 text-center rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer"
-              style={{
-                background: activeTab === 'chat' ? 'rgba(212,175,55,0.12)' : 'transparent',
-                color: activeTab === 'chat' ? '#f59e0b' : 'rgba(156,163,175,0.6)',
-                border: activeTab === 'chat' ? '1px solid rgba(212,175,55,0.25)' : '1px solid transparent',
-              }}
-            >
-              💬 Chat
-            </button>
-            <button
-              onClick={() => setActiveTab('properties')}
-              className="flex-grow py-2 text-center rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer"
-              style={{
-                background: activeTab === 'properties' ? 'rgba(212,175,55,0.12)' : 'transparent',
-                color: activeTab === 'properties' ? '#f59e0b' : 'rgba(156,163,175,0.6)',
-                border: activeTab === 'properties' ? '1px solid rgba(212,175,55,0.25)' : '1px solid transparent',
-              }}
-            >
-              🏠 Properties
+              ✕
             </button>
           </div>
 
           {/* Tab Content Area */}
-          <div className="flex-grow overflow-y-auto" style={{ maxHeight: '50vh', minHeight: '260px' }}>
+          <div className="flex-grow overflow-y-auto pr-1">
             {activeTab === 'lobby' && (
               <div className="flex flex-col gap-4 p-1">
                 {/* Players cards */}
@@ -1853,9 +1867,9 @@ export default function GameRoom() {
             )}
 
             {activeTab === 'chat' && (
-              <div className="flex flex-col h-[280px] md:h-[380px] p-1 rounded-xl" style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.03)' }}>
+              <div className="flex flex-col h-[33vh] p-1 rounded-xl" style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.03)' }}>
                 {/* Chat Message feed */}
-                <div className="flex-grow overflow-y-auto flex flex-col gap-2 p-2" style={{ minHeight: '180px' }}>
+                <div className="flex-grow overflow-y-auto flex flex-col gap-2 p-2">
                   {chatMessages.length === 0 ? (
                     <p className="text-xs text-center mt-4" style={{ color: 'rgba(156,163,175,0.25)' }}>No messages yet</p>
                   ) : (
@@ -2095,6 +2109,102 @@ export default function GameRoom() {
           </div>
         </div>
       </div>
+
+      {/* Mobile Turn Actions Hub */}
+      {!sessionStorage.getItem('mi_isSpectator') === 'true' && isMyTurn && activeTab === 'none' && (
+        <div className="flex lg:hidden fixed bottom-20 left-4 right-4 z-30 flex-col gap-2 p-3 rounded-2xl border backdrop-blur-md animate-slide-up"
+             style={{
+               background: 'rgba(15, 10, 5, 0.92)',
+               borderColor: 'rgba(212,175,55,0.22)',
+               boxShadow: '0 8px 32px rgba(0,0,0,0.7)'
+             }}>
+          <div className="flex gap-2 w-full">
+            {canRoll && (
+              <button
+                onClick={handleRollDice}
+                disabled={actionLoading === 'roll'}
+                className="flex-grow py-3 rounded-xl text-xs font-black uppercase tracking-wider text-black bg-gradient-to-r from-amber-500 to-yellow-500 hover:brightness-110 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                style={{ fontFamily: "'DM Sans', sans-serif" }}
+              >
+                {actionLoading === 'roll' ? '⚡ Rolling...' : '🎲 Roll Dice'}
+              </button>
+            )}
+            {canPayJail && (
+              <button
+                onClick={handlePayJail}
+                disabled={actionLoading === 'jail'}
+                className="flex-grow py-3 rounded-xl text-xs font-black uppercase tracking-wider text-white bg-gradient-to-r from-red-600 to-rose-500 hover:brightness-110 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                style={{ fontFamily: "'DM Sans', sans-serif" }}
+              >
+                {actionLoading === 'jail' ? '⚡ Paying...' : '💸 Pay Jail'}
+              </button>
+            )}
+            <button
+              onClick={handleEndTurn}
+              disabled={!canEnd || actionLoading === 'end'}
+              className="flex-grow py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5"
+              style={{
+                fontFamily: "'DM Sans', sans-serif",
+                background: canEnd ? 'rgba(34,197,94,0.18)' : 'rgba(255,255,255,0.02)',
+                border: canEnd ? '1px solid rgba(34,197,94,0.35)' : '1px solid rgba(255,255,255,0.05)',
+                color: canEnd ? '#4ade80' : 'rgba(255,255,255,0.2)',
+                cursor: canEnd ? 'pointer' : 'not-allowed'
+              }}
+            >
+              {actionLoading === 'end' ? '⚡ Ending...' : '✔ End Turn'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Bottom Navigation Bar */}
+      <nav className="flex lg:hidden fixed bottom-0 inset-x-0 h-16 bg-[#070503] border-t border-white/5 z-50 justify-around items-center mobile-safe-bottom"
+           style={{
+             background: 'linear-gradient(0deg, #070503 0%, #0c0805 100%)',
+             backdropFilter: 'blur(10px)',
+             boxShadow: '0 -4px 20px rgba(0,0,0,0.5)'
+           }}>
+        <button
+          onClick={() => setActiveTab('none')}
+          className="flex flex-col items-center justify-center w-16 h-full gap-1 transition-all cursor-pointer bg-transparent border-none"
+          style={{ color: activeTab === 'none' ? '#f59e0b' : 'rgba(156,163,175,0.45)' }}
+        >
+          <span className="text-base">🎲</span>
+          <span className="text-[9px] font-extrabold uppercase tracking-wider">Board</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab(prev => prev === 'lobby' ? 'none' : 'lobby')}
+          className="flex flex-col items-center justify-center w-16 h-full gap-1 transition-all cursor-pointer bg-transparent border-none"
+          style={{ color: activeTab === 'lobby' ? '#f59e0b' : 'rgba(156,163,175,0.45)' }}
+        >
+          <span className="text-base">🎮</span>
+          <span className="text-[9px] font-extrabold uppercase tracking-wider">Lobby</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab(prev => prev === 'chat' ? 'none' : 'chat')}
+          className="flex flex-col items-center justify-center w-16 h-full gap-1 transition-all cursor-pointer relative bg-transparent border-none"
+          style={{ color: activeTab === 'chat' ? '#f59e0b' : 'rgba(156,163,175,0.45)' }}
+        >
+          <span className="text-base">💬</span>
+          <span className="text-[9px] font-extrabold uppercase tracking-wider">Chat</span>
+          {chatMessages.length > 0 && (
+            <span className="absolute top-2.5 right-3 bg-yellow-500 text-black text-[8px] font-black px-1 rounded-full min-w-3.5 h-3.5 flex items-center justify-center">
+              {chatMessages.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab(prev => prev === 'properties' ? 'none' : 'properties')}
+          className="flex flex-col items-center justify-center w-16 h-full gap-1 transition-all cursor-pointer bg-transparent border-none"
+          style={{ color: activeTab === 'properties' ? '#f59e0b' : 'rgba(156,163,175,0.45)' }}
+        >
+          <span className="text-base">🏠</span>
+          <span className="text-[9px] font-extrabold uppercase tracking-wider">Assets</span>
+        </button>
+      </nav>
 
       {/* Players Management Modal */}
       {showPlayersModal && (

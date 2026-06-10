@@ -753,7 +753,8 @@ export const MonopolyBoard = React.memo(function MonopolyBoard({
           fontFamily:     "'DM Sans',sans-serif",
         }}>
           <div style={{
-            width:        360,
+            width:        '90%',
+            maxWidth:     360,
             borderRadius: 24,
             background:   'linear-gradient(160deg, #1b0a0a 0%, #0d0404 100%)',
             border:       '2.5px solid #ef4444',
