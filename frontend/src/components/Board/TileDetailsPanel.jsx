@@ -30,9 +30,9 @@ const PANEL_CSS = `
     --panel-right: 0;
     --panel-left: 0;
     --panel-top: auto;
-    --panel-bottom: 0;
+    --panel-bottom: 64px;
     --panel-width: 100%;
-    --panel-height: 42vh;
+    --panel-height: 46vh;
     --panel-radius: 24px 24px 0 0;
     --panel-transform-open: translateY(0);
     --panel-transform-closed: translateY(100%);
