@@ -618,6 +618,25 @@ export default function LoginPage() {
                 </div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: '#94a3b8' }}>Go Back (Main Menu)</div>
               </button>
+
+              {error && (
+                <div style={{
+                  fontSize: 13,
+                  color: '#f87171',
+                  fontWeight: 500,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '12px',
+                  marginTop: 10,
+                  background: 'rgba(248, 113, 113, 0.08)',
+                  border: '1px solid rgba(248, 113, 113, 0.2)',
+                  borderRadius: 8
+                }}>
+                  <span>⚠️</span>
+                  <span>{error}</span>
+                </div>
+              )}
             </div>
           ) : (
             /* Custom Email Input Form */

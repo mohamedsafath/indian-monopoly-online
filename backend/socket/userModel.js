@@ -230,6 +230,7 @@ const registerUser = async (username, email) => {
       return created.toObject();
     } catch (err) {
       console.error(`[db] Failed to save user registry:`, err.message);
+      throw err;
     }
   }
 
