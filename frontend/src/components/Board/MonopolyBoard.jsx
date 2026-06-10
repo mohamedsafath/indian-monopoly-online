@@ -136,6 +136,7 @@ function PhysicalDeck({
     : 'linear-gradient(145deg,#001528,#000d1a)';
 
   const canClick = isGlowing && isMyTurn;
+  const isMobile = typeof window !== 'undefined' ? window.innerWidth <= 768 : false;
 
   return (
     <div
@@ -144,7 +145,7 @@ function PhysicalDeck({
       style={{
         width:        'var(--deck-width, 135px)',
         height:       'var(--deck-height, 175px)',
-        borderRadius: 16,
+        borderRadius: isMobile ? 8 : 16,
         background:   bgGrad,
         border:       `1.5px solid ${isGlowing ? accent : accent + '35'}`,
         cursor:       canClick ? 'pointer' : 'default',
@@ -169,7 +170,7 @@ function PhysicalDeck({
       }}
     >
       {/* Card stack illusion */}
-      {[3, 2, 1].map((offset) => (
+      {!isMobile && [3, 2, 1].map((offset) => (
         <div key={offset} style={{
           position:    'absolute',
           bottom:      `calc(${offset * 4}px + var(--deck-bottom-offset, 32px))`,
@@ -188,7 +189,7 @@ function PhysicalDeck({
       <div style={{
         position:     'relative',
         height:       'var(--deck-top-card-height, 122px)',
-        borderRadius: 12,
+        borderRadius: isMobile ? 6 : 12,
         background:   isGlowing
           ? `linear-gradient(135deg, ${accent}22, ${accent}10)`
           : 'rgba(255,255,255,0.06)',
@@ -437,6 +438,13 @@ export const MonopolyBoard = React.memo(function MonopolyBoard({
 }) {
   const [selectedTile, setSelectedTile] = useState(null);
   const [minimizedShortfall, setMinimizedShortfall] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' ? window.innerWidth <= 768 : false);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     if (!isMyTurn) {
@@ -596,8 +604,8 @@ export const MonopolyBoard = React.memo(function MonopolyBoard({
                 />
               </div>
 
-              {/* Tile Details Panel */}
-              {selectedTileData && (
+              {/* Tile Details Panel (Desktop inside board wrapper) */}
+              {selectedTileData && !isMobile && (
                 <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, zIndex: 30, pointerEvents: 'auto' }}>
                   <TileDetailsPanel
                     tile={selectedTileData}
@@ -626,6 +634,29 @@ export const MonopolyBoard = React.memo(function MonopolyBoard({
       </div>
 
       {/* ── Overlays (outside board, full-screen) ── */}
+
+      {/* Tile Details Panel (Mobile outside board wrapper to prevent overflow:hidden clipping) */}
+      {selectedTileData && isMobile && (
+        <TileDetailsPanel
+          tile={selectedTileData}
+          property={selectedProperty}
+          ownerPlayer={selectedOwner}
+          pendingAction={pendingAction}
+          isMyTurn={isMyTurn}
+          myMoney={me?.money ?? 0}
+          monopolies={monopolies}
+          onBuy={onBuy}
+          onEndTurn={onEndTurn}
+          onBuildHouse={onBuildHouse}
+          onBuildHotel={onBuildHotel}
+          onSellHouse={onSellHouse}
+          onSellHotel={onSellHotel}
+          myId={myId}
+          gameState={gameState}
+          onClose={handlePanelClose}
+          onAuctionProperty={onAuctionProperty}
+        />
+      )}
 
       {/* Card reveal popup */}
       {activeCard && (
