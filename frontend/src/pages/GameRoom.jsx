@@ -1158,6 +1158,10 @@ export default function GameRoom() {
           --deck-label-size: 12px;
           --deck-bottom-label-size: 10px;
           --deck-gap: 6px;
+          --deck-top: 12%;
+          --deck-right: 12%;
+          --deck-bottom: 12%;
+          --deck-left: 12%;
           --tile-name-vertical: 9.5px;
           --tile-name-horizontal-2line: 9px;
           --tile-name-horizontal-1line: 10.5px;
@@ -1167,6 +1171,14 @@ export default function GameRoom() {
           --tile-icon-other-size: 18px;
           --tile-house-size: 8px;
           --tile-hotel-size: 10px;
+          --corner-icon-size: 34px;
+          --corner-icon-start-size: 38px;
+          --corner-icon-margin: 8px;
+          --corner-label-size: 16px;
+          --corner-sub-size: 11px;
+          --corner-sub-margin: 4px;
+          --token-size: 28px;
+          --token-font-size: 15px;
         }
         
         @media (min-width: 1024px) {
@@ -1190,6 +1202,10 @@ export default function GameRoom() {
             --deck-label-size: 8px;
             --deck-bottom-label-size: 7px;
             --deck-gap: 2px;
+            --deck-top: 18%;
+            --deck-right: 18%;
+            --deck-bottom: 18%;
+            --deck-left: 18%;
             --tile-name-vertical: 7.5px;
             --tile-name-horizontal-2line: 7px;
             --tile-name-horizontal-1line: 8px;
@@ -1199,6 +1215,14 @@ export default function GameRoom() {
             --tile-icon-other-size: 12px;
             --tile-house-size: 5px;
             --tile-hotel-size: 6px;
+            --corner-icon-size: 18px;
+            --corner-icon-start-size: 20px;
+            --corner-icon-margin: 2px;
+            --corner-label-size: 9px;
+            --corner-sub-size: 6.5px;
+            --corner-sub-margin: 1px;
+            --token-size: 18px;
+            --token-font-size: 10px;
           }
         }
       `}</style>
@@ -1267,25 +1291,43 @@ export default function GameRoom() {
           </button>
           <ConnectionStatus />
           {gameState?.status === 'playing' && (
-            <button
-              onClick={() => setShowEndGameModal(true)}
-              className="hidden md:inline-block"
-              style={{
-                padding: '4px 10px',
-                borderRadius: 8,
-                background: 'rgba(239, 68, 68, 0.15)',
-                border: '1px solid rgba(239, 68, 68, 0.45)',
-                color: '#fca5a5',
-                fontSize: 10,
-                fontWeight: 700,
-                cursor: 'pointer',
-                transition: 'background 0.2s',
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.25)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)'}
-            >
-              🛑 End Game
-            </button>
+            <>
+              <button
+                onClick={() => setShowEndGameModal(true)}
+                className="hidden md:inline-block"
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: 8,
+                  background: 'rgba(239, 68, 68, 0.15)',
+                  border: '1px solid rgba(239, 68, 68, 0.45)',
+                  color: '#fca5a5',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'background 0.2s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.25)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)'}
+              >
+                🛑 End Game
+              </button>
+              <button
+                onClick={() => setShowEndGameModal(true)}
+                className="inline-block md:hidden"
+                style={{
+                  padding: '3px 8px',
+                  borderRadius: 6,
+                  background: 'rgba(239, 68, 68, 0.15)',
+                  border: '1px solid rgba(239, 68, 68, 0.45)',
+                  color: '#fca5a5',
+                  fontSize: 9,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                🛑 End
+              </button>
+            </>
           )}
           <button
             onClick={async () => {

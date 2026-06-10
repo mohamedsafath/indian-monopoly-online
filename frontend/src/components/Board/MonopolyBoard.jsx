@@ -301,7 +301,7 @@ function BoardCenter({
       {/* ── Deck stacks ── */}
       {/* Chance deck — top-right of center */}
       <div style={{
-        position: 'absolute', top: '12%', right: '12%',
+        position: 'absolute', top: 'var(--deck-top, 12%)', right: 'var(--deck-right, 12%)',
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
         zIndex: 5,
       }}>
@@ -316,7 +316,7 @@ function BoardCenter({
 
       {/* Community deck — bottom-left of center */}
       <div style={{
-        position: 'absolute', bottom: '12%', left: '12%',
+        position: 'absolute', bottom: 'var(--deck-bottom, 12%)', left: 'var(--deck-left, 12%)',
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
         zIndex: 5,
       }}>

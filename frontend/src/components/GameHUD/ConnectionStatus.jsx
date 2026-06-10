@@ -51,7 +51,7 @@ export default function ConnectionStatus({ className = '' }) {
         <span className="relative inline-flex rounded-full h-2 w-2"
               style={{ background: dot, boxShadow: `0 0 6px ${glow}` }} />
       </span>
-      {label}
+      <span className="hidden md:inline">{label}</span>
     </div>
   );
 }

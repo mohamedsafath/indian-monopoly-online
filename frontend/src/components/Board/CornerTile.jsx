@@ -113,10 +113,10 @@ export const CornerTile = React.memo(function CornerTile({
 
       {/* Icon */}
       <div style={{
-        fontSize:   tileId === 0 ? 38 : 34,
+        fontSize:   tileId === 0 ? 'var(--corner-icon-start-size, 38px)' : 'var(--corner-icon-size, 34px)',
         lineHeight: 1,
         filter:     `drop-shadow(0 0 8px ${cfg.accent}80)`,
-        marginBottom: 8,
+        marginBottom: 'var(--corner-icon-margin, 8px)',
         zIndex:     2,
       }}>
         {cfg.icon}
@@ -124,7 +124,7 @@ export const CornerTile = React.memo(function CornerTile({
 
       {/* Label */}
       <div style={{
-        fontSize:      16,
+        fontSize:      'var(--corner-label-size, 16px)',
         fontWeight:    900,
         letterSpacing: '0.12em',
         textTransform: 'uppercase',
@@ -139,9 +139,9 @@ export const CornerTile = React.memo(function CornerTile({
 
       {/* Subtitle */}
       <div style={{
-        fontSize:   11,
+        fontSize:   'var(--corner-sub-size, 11px)',
         color:      'rgba(255,255,255,0.35)',
-        marginTop:  4,
+        marginTop:  'var(--corner-sub-margin, 4px)',
         textAlign:  'center',
         lineHeight: 1.2,
         zIndex:     2,

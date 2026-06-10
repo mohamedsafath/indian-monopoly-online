@@ -8,7 +8,7 @@
  * - Hover: full-name tooltip + vivid glow ring
  * - House/hotel overlay is larger and clearer
  */
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { COLOR_GROUP_META } from '../../utils/boardTiles';
 import { OwnershipBadge } from './OwnershipBadge';
 
@@ -139,6 +139,14 @@ export const BoardTile = React.memo(function BoardTile({
   onClick,
 }) {
   const [hovered, setHovered] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth <= 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const typeStyle  = TYPE_STYLES[tile.type] ?? TYPE_STYLES.property;
   const groupColor = tile.group ? (COLOR_GROUP_META[tile.group]?.hex ?? null) : null;
@@ -152,12 +160,12 @@ export const BoardTile = React.memo(function BoardTile({
 
   const displayLines = useMemo(() => {
     const displayName = shortName(tile);
-    if (isVerticalEdge) {
-      return [displayName]; // Display short name on a single line horizontally for vertical sides
+    if (isVerticalEdge || isMobile) {
+      return [displayName]; // Display short name on a single line horizontally for vertical sides, or vertically on mobile horizontal edges
     } else {
       return TWO_LINE_NAMES[tile.name] ?? [displayName];
     }
-  }, [isVerticalEdge, tile]);
+  }, [isVerticalEdge, isMobile, tile]);
 
   const nameSize = isVerticalEdge
     ? 'var(--tile-name-vertical, 9.5px)'
@@ -374,6 +382,7 @@ export const BoardTile = React.memo(function BoardTile({
             overflow:      'hidden',
             textOverflow:  'ellipsis',
             textShadow:    isMonopoly && groupColor ? `0 0 8px ${groupColor}50` : 'none',
+            writingMode: (!isVerticalEdge && isMobile) ? 'vertical-rl' : 'horizontal-tb',
             order:         2,
           }}>
             {displayLines.map((line, idx) => (

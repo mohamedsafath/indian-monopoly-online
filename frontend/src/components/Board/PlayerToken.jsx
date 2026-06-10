@@ -17,8 +17,8 @@ export const PlayerToken = React.memo(function PlayerToken({
       title={`${player.username}${player.isBankrupt ? ' (bankrupt)' : ''}`}
       style={{
         position:        'relative',
-        width:           28,
-        height:          28,
+        width:           'var(--token-size, 28px)',
+        height:          'var(--token-size, 28px)',
         borderRadius:    '50%',
         background:      player.isBankrupt
           ? 'rgba(60,60,60,0.7)'
@@ -31,7 +31,7 @@ export const PlayerToken = React.memo(function PlayerToken({
         display:         'flex',
         alignItems:      'center',
         justifyContent:  'center',
-        fontSize:        15,
+        fontSize:        'var(--token-font-size, 15px)',
         transform:       `translate(${offsetX}px, ${offsetY}px)`,
         transition:      'transform 0.12s ease-out',
         zIndex:          isCurrentPlayer ? 20 : 10,
@@ -50,7 +50,7 @@ export const PlayerToken = React.memo(function PlayerToken({
         flexShrink: 0,
       }}
     >
-      <span style={{ fontSize: 15, lineHeight: 1 }}>
+      <span style={{ fontSize: 'var(--token-font-size, 15px)', lineHeight: 1 }}>
         {player.isBankrupt ? '💸' : player.token}
       </span>
 
