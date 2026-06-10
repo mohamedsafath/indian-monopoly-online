@@ -207,9 +207,9 @@ function PhysicalDeck({
           lineHeight: 1,
         }}>{icon}</div>
         <div style={{
-          fontSize:      'var(--deck-label-size, 12px)',
+          fontSize:      isMobile ? (label.length > 7 ? '5px' : '6px') : 'var(--deck-label-size, 12px)',
           fontWeight:    900,
-          letterSpacing: '0.15em',
+          letterSpacing: isMobile ? '0.02em' : '0.15em',
           textTransform: 'uppercase',
           color:         isGlowing ? accent : `${accent}80`,
           textAlign:     'center',
@@ -222,7 +222,7 @@ function PhysicalDeck({
         textAlign:     'center',
         fontSize:      'var(--deck-bottom-label-size, 10px)',
         fontWeight:    800,
-        letterSpacing: '0.08em',
+        letterSpacing: isMobile ? '0.02em' : '0.08em',
         color:         isGlowing ? accent : `${accent}60`,
         textTransform: 'uppercase',
         paddingTop:    '4px',

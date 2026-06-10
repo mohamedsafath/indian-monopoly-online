@@ -88,8 +88,8 @@ export const BOARD_ANIMATIONS_CSS = `
   }
 
   @keyframes floatUpFade {
-    0%   { transform: translateY(0); opacity: 1; }
-    100% { transform: translateY(-40px); opacity: 0; }
+    0%   { transform: translateX(-50%) translateY(0); opacity: 1; }
+    100% { transform: translateX(-50%) translateY(-40px); opacity: 0; }
   }
 
   .token-arrive   { animation: tokenBounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
