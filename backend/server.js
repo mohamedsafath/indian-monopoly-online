@@ -391,6 +391,8 @@ adminRouter.get("/metrics", verifyAdmin, async (req, res) => {
     const activeRooms = [];
     let lobbiesCount = 0;
     let gamesCount = 0;
+    let onlinePlayersCount = 0;
+    let playingPlayersCount = 0;
     
     for (const room of rooms.values()) {
       const isPlaying = room.status === 'playing' || (room.gameState && room.gameState.status === 'playing');
@@ -398,6 +400,14 @@ adminRouter.get("/metrics", verifyAdmin, async (req, res) => {
         gamesCount++;
       } else {
         lobbiesCount++;
+      }
+
+      // Count connected human players and spectators in this room
+      const humanPlayers = room.players.filter(p => !p.isBot && p.connected);
+      const humanSpectators = (room.spectators || []).filter(p => p.connected);
+      onlinePlayersCount += (humanPlayers.length + humanSpectators.length);
+      if (isPlaying) {
+        playingPlayersCount += humanPlayers.length;
       }
       
       activeRooms.push({
@@ -411,6 +421,8 @@ adminRouter.get("/metrics", verifyAdmin, async (req, res) => {
     }
 
     const { getIsDbActive } = require("./socket/roomModel");
+    const { getCompletedMatchesCount } = require("./socket/matchModel");
+    const finishedGamesCount = await getCompletedMatchesCount();
     
     res.json({
       ok: true,
@@ -422,6 +434,9 @@ adminRouter.get("/metrics", verifyAdmin, async (req, res) => {
           rss: memory.rss
         },
         socketsCount: io.sockets.sockets.size,
+        onlinePlayersCount,
+        playingPlayersCount,
+        finishedGamesCount,
         lobbiesCount,
         gamesCount,
         dbStatus: getIsDbActive() ? 'connected' : 'memory-fallback',

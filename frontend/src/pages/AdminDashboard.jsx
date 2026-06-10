@@ -8,6 +8,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import CreatorFooter from '../components/CreatorFooter';
 
 // ── Decorative Ornamental Border ───────────────────────────────────────────
 function OrnamentalBorder({ className = '' }) {
@@ -515,6 +516,48 @@ export default function AdminDashboard() {
                       <span>Lobbies: <strong style={{ color: '#fff' }}>{metrics.lobbiesCount}</strong></span>
                       <span>Playing: <strong style={{ color: '#34d399' }}>{metrics.gamesCount}</strong></span>
                     </div>
+                  </div>
+
+                  {/* Online Human Players */}
+                  <div style={{
+                    background: 'rgba(15, 23, 42, 0.35)',
+                    border: '1px solid rgba(255, 255, 255, 0.05)',
+                    borderRadius: 12,
+                    padding: 20
+                  }}>
+                    <span style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Human Players Online</span>
+                    <div style={{ fontSize: 32, fontWeight: 900, color: '#38bdf8', margin: '8px 0' }}>
+                      {metrics.onlinePlayersCount ?? 0}
+                    </div>
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}>Total connected players</span>
+                  </div>
+
+                  {/* Players in Gameplay */}
+                  <div style={{
+                    background: 'rgba(15, 23, 42, 0.35)',
+                    border: '1px solid rgba(255, 255, 255, 0.05)',
+                    borderRadius: 12,
+                    padding: 20
+                  }}>
+                    <span style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Players in Gameplay</span>
+                    <div style={{ fontSize: 32, fontWeight: 900, color: '#10b981', margin: '8px 0' }}>
+                      {metrics.playingPlayersCount ?? 0}
+                    </div>
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}>In active matches</span>
+                  </div>
+
+                  {/* Completed Games */}
+                  <div style={{
+                    background: 'rgba(15, 23, 42, 0.35)',
+                    border: '1px solid rgba(255, 255, 255, 0.05)',
+                    borderRadius: 12,
+                    padding: 20
+                  }}>
+                    <span style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Finished Games</span>
+                    <div style={{ fontSize: 32, fontWeight: 900, color: '#ec4899', margin: '8px 0' }}>
+                      {metrics.finishedGamesCount ?? 0}
+                    </div>
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}>Saved completed matches</span>
                   </div>
 
                   {/* Uptime */}
@@ -1152,6 +1195,7 @@ export default function AdminDashboard() {
           50% { opacity: 1; transform: scale(1.05); }
         }
       `}</style>
+      <CreatorFooter />
     </div>
   );
 }

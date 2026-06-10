@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import socketService from '../services/socketService';
 import socket from '../socket/socket';
+import CreatorFooter from '../components/CreatorFooter';
 
 export default function ResultPage() {
   const { roomCode } = useParams();
@@ -723,6 +724,7 @@ export default function ResultPage() {
           to { transform: rotate(360deg); }
         }
       `}</style>
+      <CreatorFooter />
     </div>
   );
 }

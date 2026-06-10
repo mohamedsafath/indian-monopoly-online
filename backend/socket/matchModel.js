@@ -78,8 +78,22 @@ const getPlayerMatches = async (playerIdOrName) => {
     .sort((a, b) => b.date - a.date);
 };
 
+const getCompletedMatchesCount = async () => {
+  const dbActive = getIsDbActive();
+  if (dbActive) {
+    try {
+      return await Match.countDocuments();
+    } catch (err) {
+      console.error("[db] Failed to count completed matches:", err.message);
+      return 0;
+    }
+  }
+  return inMemoryMatches.length;
+};
+
 module.exports = {
   Match,
   saveMatch,
-  getPlayerMatches
+  getPlayerMatches,
+  getCompletedMatchesCount
 };

@@ -14,6 +14,7 @@ import RoomCode from "@/components/Lobby/RoomCode";
 import ConnectionStatus from "@/components/GameHUD/ConnectionStatus";
 import RuleBookModal from '@/components/RuleBookModal';
 import { PLAYER_TOKENS } from '@/utils/boardLayout';
+import CreatorFooter from '@/components/CreatorFooter';
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -988,6 +989,7 @@ export default function Lobby() {
 
       </div>
       <RuleBookModal isOpen={showRuleBook} onClose={() => setShowRuleBook(false)} />
+      <CreatorFooter />
     </div>
   );
 }

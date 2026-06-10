@@ -10,6 +10,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import socketService from '@/services/socketService';
 import RuleBookModal from '@/components/RuleBookModal';
+import CreatorFooter from '@/components/CreatorFooter';
 
 // ── Decorative SVG border motif (rangoli-inspired geometric) ────────────────
 function OrnamentialBorder({ className = '' }) {
@@ -496,6 +497,7 @@ export default function Home() {
       </main>
 
       <CityStrip />
+      <CreatorFooter />
     </div>
   );
 }

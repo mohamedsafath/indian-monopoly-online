@@ -8,6 +8,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import CreatorFooter from '@/components/CreatorFooter';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5001';
 
@@ -578,6 +579,7 @@ export default function ProfilePage() {
       </main>
 
       <CityStrip />
+      <CreatorFooter />
 
       {/* Avatar selection modal */}
       {isModalOpen && (

@@ -8,6 +8,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import CreatorFooter from '@/components/CreatorFooter';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5001';
 
@@ -387,35 +388,9 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Footer info */}
-        <p style={{ fontSize: 11, color: '#475569', marginTop: 40, display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
-          <span>Indian Festive Edition</span>
-          <span>•</span>
-          <span>Created by Mohamed Safath</span>
-          <span>(</span>
-          <a 
-            href="https://www.linkedin.com/in/mohamed-safath/" 
-            target="_blank" 
-            rel="noopener noreferrer" 
-            style={{ color: '#a8c7fa', textDecoration: 'none', transition: 'color 0.2s' }}
-            onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline'; e.currentTarget.style.color = '#c2e7ff'; }}
-            onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none'; e.currentTarget.style.color = '#a8c7fa'; }}
-          >
-            LinkedIn
-          </a>
-          <span>/</span>
-          <a 
-            href="https://www.instagram.com/justt.zafathh/" 
-            target="_blank" 
-            rel="noopener noreferrer" 
-            style={{ color: '#a8c7fa', textDecoration: 'none', transition: 'color 0.2s' }}
-            onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline'; e.currentTarget.style.color = '#c2e7ff'; }}
-            onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none'; e.currentTarget.style.color = '#a8c7fa'; }}
-          >
-            Instagram
-          </a>
-          <span>)</span>
-        </p>
+        <div style={{ width: '100%', marginTop: 'auto' }}>
+          <CreatorFooter />
+        </div>
       </div>
     );
   }
@@ -806,6 +781,8 @@ export default function LoginPage() {
           <span style={{ cursor: 'pointer' }}>Terms</span>
         </div>
       </footer>
+
+      <CreatorFooter />
 
       {/* Styles */}
       <style>{`
