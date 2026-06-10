@@ -10,6 +10,47 @@ import { fmt, isPurchasable, rentDescription } from '../../utils/tileHelpers';
 import { GROUP_COLORS } from '../../utils/boardLayout';
 import { BOARD_TILES, COLOR_GROUP_META } from '../../utils/boardTiles';
 
+const PANEL_CSS = `
+:root {
+  --panel-position: absolute;
+  --panel-right: 0;
+  --panel-left: auto;
+  --panel-top: 0;
+  --panel-bottom: 0;
+  --panel-width: 228px;
+  --panel-height: 100%;
+  --panel-radius: 0 0 0 14px;
+  --panel-transform-open: translateX(0);
+  --panel-transform-closed: translateX(100%);
+  --panel-border: 1px solid rgba(212,175,55,0.18);
+}
+@media (max-width: 768px) {
+  :root {
+    --panel-position: fixed;
+    --panel-right: 0;
+    --panel-left: 0;
+    --panel-top: auto;
+    --panel-bottom: 0;
+    --panel-width: 100%;
+    --panel-height: 42vh;
+    --panel-radius: 24px 24px 0 0;
+    --panel-transform-open: translateY(0);
+    --panel-transform-closed: translateY(100%);
+    --panel-border: none;
+    --panel-border-top: 2px solid rgba(212,175,55,0.3);
+  }
+}
+`;
+
+let cssInjected = false;
+function injectCSS() {
+  if (cssInjected || typeof document === 'undefined') return;
+  const el = document.createElement('style');
+  el.textContent = PANEL_CSS;
+  document.head.appendChild(el);
+  cssInjected = true;
+}
+
 export function TileDetailsPanel({
   tile,
   property,
@@ -29,6 +70,7 @@ export function TileDetailsPanel({
   onClose,
   onAuctionProperty,
 }) {
+  injectCSS();
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -76,17 +118,22 @@ export function TileDetailsPanel({
 
   return (
     <div style={{
-      position:      'absolute',
-      right:         0, top: 0, bottom: 0,
-      width:         228,
+      position:      'var(--panel-position, absolute)',
+      right:         'var(--panel-right, 0)',
+      left:          'var(--panel-left, auto)',
+      top:           'var(--panel-top, 0)',
+      bottom:        'var(--panel-bottom, 0)',
+      width:         'var(--panel-width, 228px)',
+      height:        'var(--panel-height, 100%)',
       background:    'rgba(8,6,4,0.97)',
-      border:        '1px solid rgba(212,175,55,0.18)',
-      borderRadius:  '0 0 0 14px',
+      border:        'var(--panel-border, 1px solid rgba(212,175,55,0.18))',
+      borderTop:     'var(--panel-border-top, none)',
+      borderRadius:  'var(--panel-radius, 0 0 0 14px)',
       overflow:      'hidden',
       zIndex:        50,
       display:       'flex',
       flexDirection: 'column',
-      transform:     visible ? 'translateX(0)' : 'translateX(100%)',
+      transform:     visible ? 'var(--panel-transform-open, translateX(0))' : 'var(--panel-transform-closed, translateX(100%))',
       transition:    'transform 0.32s cubic-bezier(0.34,1.1,0.64,1)',
       opacity:       visible ? 1 : 0,
       fontFamily:    "'DM Sans',sans-serif",

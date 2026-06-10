@@ -1178,8 +1178,8 @@ export default function GameRoom() {
 
         @media (max-width: 768px) {
           :root {
-            --board-width: min(100vw - 8px, 76vh);
-            --board-height: min(100vw - 8px, 76vh);
+            --board-width: min(100vw - 4px, 80vh);
+            --board-height: min(100vw - 4px, 80vh);
             --board-padding: 2px;
             --deck-width: 70px;
             --deck-height: 90px;
@@ -1342,7 +1342,8 @@ export default function GameRoom() {
           return (
             <div
               key={p.id}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold flex-shrink-0 transition-all border"
+              onClick={() => setShowPlayersModal(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold flex-shrink-0 transition-all border cursor-pointer active:scale-95 hover:border-yellow-500/50"
               style={{
                 borderColor: isCurrent ? '#f59e0b' : 'rgba(255,255,255,0.06)',
                 background: isCurrent ? 'rgba(245,158,11,0.08)' : 'rgba(255,255,255,0.02)',
@@ -2183,50 +2184,71 @@ export default function GameRoom() {
         </div>
       </div>
 
-      {/* Mobile Turn Actions Hub */}
-      {!sessionStorage.getItem('mi_isSpectator') === 'true' && isMyTurn && activeTab === 'none' && (
-        <div className="flex lg:hidden fixed bottom-20 left-4 right-4 z-30 flex-col gap-2 p-3 rounded-2xl border backdrop-blur-md animate-slide-up"
+      {/* Mobile Action Bar */}
+      {sessionStorage.getItem('mi_isSpectator') !== 'true' && gameState?.status === 'playing' && activeTab === 'none' && (
+        <div className="flex lg:hidden fixed bottom-16 inset-x-0 z-30 justify-around items-center px-3 py-1.5 border-t border-white/5"
              style={{
-               background: 'rgba(15, 10, 5, 0.92)',
-               borderColor: 'rgba(212,175,55,0.22)',
-               boxShadow: '0 8px 32px rgba(0,0,0,0.7)'
+               background: 'rgba(7, 5, 3, 0.95)',
+               backdropFilter: 'blur(8px)',
+               height: '48px',
+               boxShadow: '0 -4px 12px rgba(0,0,0,0.35)'
              }}>
-          <div className="flex gap-2 w-full">
-            {canRoll && (
-              <button
-                onClick={handleRollDice}
-                disabled={actionLoading === 'roll'}
-                className="flex-grow py-3 rounded-xl text-xs font-black uppercase tracking-wider text-black bg-gradient-to-r from-amber-500 to-yellow-500 hover:brightness-110 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                style={{ fontFamily: "'DM Sans', sans-serif" }}
-              >
-                {actionLoading === 'roll' ? '⚡ Rolling...' : '🎲 Roll Dice'}
-              </button>
-            )}
-            {canPayJail && (
-              <button
-                onClick={handlePayJail}
-                disabled={actionLoading === 'jail'}
-                className="flex-grow py-3 rounded-xl text-xs font-black uppercase tracking-wider text-white bg-gradient-to-r from-red-600 to-rose-500 hover:brightness-110 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                style={{ fontFamily: "'DM Sans', sans-serif" }}
-              >
-                {actionLoading === 'jail' ? '⚡ Paying...' : '💸 Pay Jail'}
-              </button>
-            )}
+          {isMyTurn && canRoll && (
+            <button
+              onClick={handleRollDice}
+              disabled={actionLoading === 'roll'}
+              className="flex-1 mx-0.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider text-black bg-gradient-to-r from-amber-500 to-yellow-500 hover:brightness-110 active:scale-95 transition-all cursor-pointer text-center truncate"
+              style={{ fontFamily: "'DM Sans', sans-serif" }}
+            >
+              🎲 Roll
+            </button>
+          )}
+          {isMyTurn && canPayJail && (
+            <button
+              onClick={handlePayJail}
+              disabled={actionLoading === 'jail'}
+              className="flex-1 mx-0.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider text-white bg-gradient-to-r from-red-600 to-rose-500 hover:brightness-110 active:scale-95 transition-all cursor-pointer text-center truncate"
+              style={{ fontFamily: "'DM Sans', sans-serif" }}
+            >
+              💸 Jail
+            </button>
+          )}
+          {isMyTurn && canEnd && (
             <button
               onClick={handleEndTurn}
-              disabled={!canEnd || actionLoading === 'end'}
-              className="flex-grow py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5"
-              style={{
-                fontFamily: "'DM Sans', sans-serif",
-                background: canEnd ? 'rgba(34,197,94,0.18)' : 'rgba(255,255,255,0.02)',
-                border: canEnd ? '1px solid rgba(34,197,94,0.35)' : '1px solid rgba(255,255,255,0.05)',
-                color: canEnd ? '#4ade80' : 'rgba(255,255,255,0.2)',
-                cursor: canEnd ? 'pointer' : 'not-allowed'
-              }}
+              disabled={actionLoading === 'end'}
+              className="flex-1 mx-0.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider text-emerald-400 border border-emerald-500/25 bg-emerald-500/10 active:scale-95 transition-all cursor-pointer text-center truncate"
+              style={{ fontFamily: "'DM Sans', sans-serif" }}
             >
-              {actionLoading === 'end' ? '⚡ Ending...' : '✔ End Turn'}
+              ✔ End
             </button>
-          </div>
+          )}
+          <button
+            onClick={() => setShowBuildPanel(p => !p)}
+            className={`flex-1 mx-0.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider active:scale-95 transition-all cursor-pointer text-center truncate ${
+              showBuildPanel 
+                ? 'bg-green-500/15 text-green-400 border border-green-500/30' 
+                : 'bg-white/5 text-gray-300 border border-white/10'
+            }`}
+            style={{ fontFamily: "'DM Sans', sans-serif" }}
+          >
+            🏠 Build
+          </button>
+          <button
+            onClick={() => setShowTradeModal(true)}
+            className="flex-1 mx-0.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-white/5 text-gray-300 border border-white/10 active:scale-95 transition-all cursor-pointer text-center truncate"
+            style={{ fontFamily: "'DM Sans', sans-serif" }}
+          >
+            🤝 Trade
+          </button>
+          <button
+            onClick={() => setShowLoanModal(true)}
+            disabled={me?.loanActive}
+            className="flex-1 mx-0.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-white/5 text-gray-300 border border-white/10 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all cursor-pointer text-center truncate"
+            style={{ fontFamily: "'DM Sans', sans-serif" }}
+          >
+            🏦 Loan
+          </button>
         </div>
       )}
 
