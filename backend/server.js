@@ -42,7 +42,9 @@ const feedbackLimiter = rateLimit({
 
 // Middleware
 app.use(cors({
-  origin: process.env.CLIENT_URL || "http://localhost:5173",
+  origin: function (origin, callback) {
+    callback(null, true);
+  },
   credentials: true,
 }));
 app.use(express.json());
@@ -501,8 +503,11 @@ app.get("/", (req, res) => {
 // Socket.IO setup
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin: function (origin, callback) {
+      callback(null, true);
+    },
     methods: ["GET", "POST"],
+    credentials: true
   },
 });
 
