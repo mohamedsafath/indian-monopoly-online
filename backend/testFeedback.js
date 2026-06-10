@@ -7,7 +7,7 @@
 
 require('dotenv').config();
 const { connectDB, getIsDbActive } = require('./socket/roomModel');
-const { addFeedback, getAllFeedback } = require('./socket/feedbackModel');
+const { addFeedback, getAllFeedback, hasSubmittedFeedback } = require('./socket/feedbackModel');
 const { isAdmin } = require('./socket/userModel');
 const fs = require('fs');
 const path = require('path');
@@ -81,6 +81,23 @@ const runTest = async () => {
     process.exit(1);
   }
   console.log("✅ Feedback retrieval validation passed!");
+
+  // 4.5. Test feedback uniqueness validation (hasSubmittedFeedback)
+  console.log("\n4.5. Checking feedback uniqueness validator...");
+  const hasSubmittedTrue = await hasSubmittedFeedback("TEST_FB_99", "test_player_id_101");
+  console.log(`- hasSubmittedFeedback for existing submission: ${hasSubmittedTrue} (Expected: true)`);
+  if (!hasSubmittedTrue) {
+    console.error("FAIL: hasSubmittedFeedback returned false for an existing submission!");
+    process.exit(1);
+  }
+  
+  const hasSubmittedFalse = await hasSubmittedFeedback("TEST_FB_99", "another_player_id");
+  console.log(`- hasSubmittedFeedback for non-existing submission: ${hasSubmittedFalse} (Expected: false)`);
+  if (hasSubmittedFalse) {
+    console.error("FAIL: hasSubmittedFeedback returned true for a non-existing submission!");
+    process.exit(1);
+  }
+  console.log("✅ Feedback uniqueness validation passed!");
 
   // 5. If in fallback mode, check that the json file exists and is populated
   if (!isDb) {

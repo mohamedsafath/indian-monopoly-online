@@ -121,7 +121,7 @@ export default function LoginPage() {
     
     const fadeTimer = setTimeout(() => {
       setSplashFade(true);
-    }, 1800);
+    }, 3000);
 
     const doneTimer = setTimeout(() => {
       try {
@@ -134,7 +134,7 @@ export default function LoginPage() {
       } catch (e) {
         setShowSplash(false);
       }
-    }, 2300);
+    }, 3500);
 
     return () => {
       clearTimeout(fadeTimer);
@@ -225,24 +225,26 @@ export default function LoginPage() {
       >
         <style>{`
           @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Sans:wght@300;400;500;600;700&display=swap');
+          @keyframes slowBlinkDouble {
+            0% { opacity: 0; transform: scale(0.90); }
+            25% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.15; transform: scale(0.95); }
+            75% { opacity: 1; transform: scale(1); }
+            90% { opacity: 1; transform: scale(1); }
+            100% { opacity: 1; transform: scale(1); }
+          }
+          .animate-slowBlink {
+            animation: slowBlinkDouble 3.0s ease-in-out forwards;
+          }
         `}</style>
 
-        <div className="text-center relative z-10 flex flex-col items-center justify-center animate-pulse">
-          <div className="text-8xl mb-6 select-none animate-bounce" style={{ filter:'drop-shadow(0 0 25px rgba(245,158,11,0.6))', animationDuration: '2.5s' }}>
-            🎲
-          </div>
-          
-          <h1 className="font-black leading-none mb-2"
-              style={{ fontFamily:"'Playfair Display',serif", fontSize:'clamp(3rem,8vw,5rem)',
-                       background:'linear-gradient(135deg,#d4af37 0%,#fde68a 40%,#f59e0b 70%,#d4af37 100%)',
-                       WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent' }}>
-            Monopoly
-          </h1>
-          <h2 className="font-bold italic leading-none"
-              style={{ fontFamily:"'Playfair Display',serif", fontSize:'clamp(1.8rem,5vw,3rem)',
-                       color:'#f97316', letterSpacing:'0.06em' }}>
-            India
-          </h2>
+        <div className="text-center relative z-10 flex flex-col items-center justify-center">
+          <img 
+            src="/splash_logo.png" 
+            alt="Indian Business Games Logo" 
+            className="w-80 h-80 md:w-[450px] md:h-[450px] object-contain select-none animate-slowBlink"
+            style={{ filter: 'drop-shadow(0 0 35px rgba(212,175,55,0.45))' }}
+          />
         </div>
       </div>
     );

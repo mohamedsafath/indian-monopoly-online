@@ -2,6 +2,7 @@ const express = require("express");
 const http = require("http");
 const cors = require("cors");
 const { Server } = require("socket.io");
+const { rateLimit } = require("express-rate-limit");
 require("dotenv").config();
 const { connectDB } = require("./socket/roomModel");
 const { seedDefaultUsers } = require("./socket/userModel");
@@ -13,11 +14,82 @@ connectDB().then(() => {
 const { mountGameSocket, rooms, destroyRoom } = require("./socket/gameSocket");
 
 const app = express();
+app.set("trust proxy", 1);
 const server = http.createServer(app);
 
+// Rate Limiters
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    ok: false,
+    error: "Too many authentication requests from this IP, please try again after 15 minutes."
+  }
+});
+
+const feedbackLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    ok: false,
+    error: "Too many feedback submissions from this IP, please try again after 10 minutes."
+  }
+});
+
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: process.env.CLIENT_URL || "http://localhost:5173",
+  credentials: true,
+}));
 app.use(express.json());
+
+const crypto = require('crypto');
+
+// Generate HMAC-based signature token for player validation
+const generateToken = (playerId) => {
+  const secret = process.env.JWT_SECRET || 'SafathSruthiJwtSecretKey2026!';
+  const signature = crypto.createHmac('sha256', secret).update(playerId).digest('hex');
+  return `${playerId}.${signature}`;
+};
+
+// Verify the player signature token
+const verifyToken = (token) => {
+  if (!token) return null;
+  const parts = token.split('.');
+  if (parts.length !== 2) return null;
+  const [playerId, signature] = parts;
+  const secret = process.env.JWT_SECRET || 'SafathSruthiJwtSecretKey2026!';
+  const expectedSignature = crypto.createHmac('sha256', secret).update(playerId).digest('hex');
+  if (signature === expectedSignature) {
+    return playerId;
+  }
+  return null;
+};
+
+// Express middleware to enforce player identity token check
+const verifyPlayerAuth = (req, res, next) => {
+  try {
+    const authHeader = req.headers["authorization"];
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ ok: false, error: "Access Denied: Missing authorization token." });
+    }
+    const token = authHeader.split(" ")[1];
+    const verifiedPlayerId = verifyToken(token);
+    if (!verifiedPlayerId) {
+      return res.status(401).json({ ok: false, error: "Access Denied: Invalid token signature." });
+    }
+    
+    // Set resolved playerId on the request object for validation in endpoints
+    req.playerId = verifiedPlayerId;
+    next();
+  } catch (err) {
+    res.status(401).json({ ok: false, error: "Access Denied: Authentication failed." });
+  }
+};
 
 // Temporary OTP store with email association
 const pendingOtps = new Map();
@@ -107,7 +179,8 @@ authRouter.post("/register-verify", async (req, res) => {
     // Clean up OTP record
     pendingOtps.delete(targetEmail);
     
-    res.json({ ok: true, user });
+    const token = generateToken(user.playerId);
+    res.json({ ok: true, user: { ...user, token } });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
@@ -129,7 +202,8 @@ authRouter.post("/login", async (req, res) => {
       return res.status(404).json({ ok: false, error: "Gmail is not registered. Please Sign Up first!" });
     }
     
-    res.json({ ok: true, user });
+    const token = generateToken(user.playerId);
+    res.json({ ok: true, user: { ...user, token } });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
@@ -158,14 +232,15 @@ authRouter.post("/google-login", async (req, res) => {
       user = await registerUser(nameCapitalized, targetEmail);
     }
     
-    res.json({ ok: true, user });
+    const token = generateToken(user.playerId);
+    res.json({ ok: true, user: { ...user, token } });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
 
 // 4. Update stats when game is finished
-authRouter.post("/update-stats", async (req, res) => {
+authRouter.post("/update-stats", verifyPlayerAuth, async (req, res) => {
   try {
     const { 
       playerId, 
@@ -184,6 +259,9 @@ authRouter.post("/update-stats", async (req, res) => {
     } = req.body;
     if (!playerId) {
       return res.status(400).json({ ok: false, error: "Missing playerId." });
+    }
+    if (playerId !== req.playerId) {
+      return res.status(403).json({ ok: false, error: "Access Denied: You cannot update another player's statistics." });
     }
     
     const { updateUserStats } = require("./socket/userModel");
@@ -238,11 +316,14 @@ authRouter.get("/profile/:playerId", async (req, res) => {
 });
 
 // 6. Update user avatar
-authRouter.post("/update-avatar", async (req, res) => {
+authRouter.post("/update-avatar", verifyPlayerAuth, async (req, res) => {
   try {
     const { playerId, avatar } = req.body;
     if (!playerId || !avatar) {
       return res.status(400).json({ ok: false, error: "Missing playerId or avatar." });
+    }
+    if (playerId !== req.playerId) {
+      return res.status(403).json({ ok: false, error: "Access Denied: You cannot update another player's avatar." });
     }
     const { updateAvatar } = require("./socket/userModel");
     const updatedUser = await updateAvatar(playerId, avatar);
@@ -263,14 +344,23 @@ feedbackRouter.post("/submit", async (req, res) => {
     if (!playerId || !username || !rating || !category) {
       return res.status(400).json({ ok: false, error: "Missing required feedback fields." });
     }
-    const { addFeedback } = require("./socket/feedbackModel");
+    const { addFeedback, hasSubmittedFeedback } = require("./socket/feedbackModel");
+    
+    // Check if feedback was already submitted for this room & player
+    if (roomCode) {
+      const alreadySubmitted = await hasSubmittedFeedback(roomCode, playerId);
+      if (alreadySubmitted) {
+        return res.status(400).json({ ok: false, error: "You have already submitted feedback for this match!" });
+      }
+    }
+
     const result = await addFeedback({ roomCode, playerId, username, email, rating, category, comment });
     res.json({ ok: true, feedback: result });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
-app.use("/api/feedback", feedbackRouter);
+app.use("/api/feedback", feedbackLimiter, feedbackRouter);
 
 // Admin Router
 const adminRouter = express.Router();
@@ -401,7 +491,7 @@ adminRouter.get("/players", verifyAdmin, async (req, res) => {
 
 app.use("/api/admin", adminRouter);
 
-app.use("/api/auth", authRouter);
+app.use("/api/auth", authLimiter, authRouter);
 
 // Basic route
 app.get("/", (req, res) => {
@@ -411,7 +501,7 @@ app.get("/", (req, res) => {
 // Socket.IO setup
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173",
+    origin: process.env.CLIENT_URL || "http://localhost:5173",
     methods: ["GET", "POST"],
   },
 });
@@ -423,5 +513,13 @@ const PORT = process.env.PORT || 5001;
 
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
+});
+
+// Process-level watchers for uncaught rejections/exceptions
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("[Fatal] Unhandled Rejection at:", promise, "reason:", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("[Fatal] Uncaught Exception thrown:", err);
 });
 

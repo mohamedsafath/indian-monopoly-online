@@ -435,6 +435,7 @@ const startAfkTimer = (io, room) => {
 const destroyRoom = (io, room) => {
   clearAfkTimer(room);
   room.players.forEach((p) => socketToRoom.delete(p.socketId));
+  (room.spectators || []).forEach((p) => socketToRoom.delete(p.socketId));
   rooms.delete(room.code);
   io.to(room.code).emit('room-destroyed', envelope(true, { code: room.code }));
   deleteRoom(room.code);
@@ -1715,6 +1716,11 @@ const mountGameSocket = (io) => {
       const player = findPlayerBySocket(gr.room, socket.id);
       if (!player) return ackError(ack, 'You are not in this game');
 
+      const enginePlayer = gr.room.gameState?.players[player.id];
+      if (enginePlayer && enginePlayer.money >= 0) {
+        return ackError(ack, 'You cannot declare bankruptcy with a positive balance');
+      }
+
       _dispatch(io, socket, gr.room, player.id, declareBankruptcy, [], ack);
     });
 
@@ -1834,7 +1840,7 @@ const mountGameSocket = (io) => {
       const player = findPlayerBySocket(gr.room, socket.id);
       if (!player) return ackError(ack, 'You are not in this game');
       if (amount === undefined || amount === null) return ackError(ack, 'amount is required');
-      if (typeof amount !== 'number' || amount < 1) return ackError(ack, 'amount must be a positive number');
+      if (typeof amount !== 'number' || !Number.isInteger(amount) || amount < 1) return ackError(ack, 'amount must be a valid positive integer');
 
       _dispatch(io, socket, gr.room, player.id, placeBid, [Math.floor(amount)], ack);
     });
@@ -2216,5 +2222,6 @@ const mountGameSocket = (io) => {
 module.exports = {
   mountGameSocket,
   rooms,
-  destroyRoom
+  destroyRoom,
+  socketToRoom
 };

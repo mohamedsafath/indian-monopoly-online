@@ -1654,7 +1654,7 @@ export default function GameRoom() {
             </div>
 
             {/* Action Buttons Section */}
-            {isMyTurn && gameState?.status === 'playing' && (
+            {gameState?.status === 'playing' && (
               <div className="p-3 flex flex-col gap-3 flex-shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
                 <button
                   onClick={() => setShowTradeModal(true)}
@@ -1967,7 +1967,7 @@ export default function GameRoom() {
             {activeTab === 'properties' && (
               <div className="flex flex-col gap-3 p-1">
                 {/* Asset Action Controls */}
-                {isMyTurn && gameState?.status === 'playing' && (
+                {gameState?.status === 'playing' && (
                   <div className="grid grid-cols-2 gap-2 p-2 rounded-xl" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
                     <button
                       onClick={() => setShowTradeModal(true)}

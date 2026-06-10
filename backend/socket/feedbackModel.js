@@ -109,8 +109,27 @@ const getAllFeedback = async () => {
   return [...inMemoryFeedbacks].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 };
 
+/**
+ * Check if a player has already submitted feedback for a specific room
+ */
+const hasSubmittedFeedback = async (roomCode, playerId) => {
+  const dbActive = getIsDbActive();
+  if (dbActive) {
+    try {
+      const existing = await Feedback.findOne({ roomCode, playerId }).lean();
+      return !!existing;
+    } catch (err) {
+      console.error(`[db] Failed to query feedback uniqueness:`, err.message);
+    }
+  }
+  return inMemoryFeedbacks.some(
+    (f) => f.roomCode === roomCode && f.playerId === playerId
+  );
+};
+
 module.exports = {
   Feedback,
   addFeedback,
-  getAllFeedback
+  getAllFeedback,
+  hasSubmittedFeedback
 };

@@ -871,7 +871,7 @@ const calculateRent = (properties, players, tileId, landingPlayerId, diceTotal) 
   if (!prop.ownerId)                      return 0;
   if (prop.mortgaged)                     return 0;
   if (prop.ownerId === landingPlayerId)   return 0;
-  if (players[prop.ownerId]?.bankrupted)  return 0;
+  if (players[prop.ownerId]?.isBankrupt)  return 0;
 
   const tile = TILE_BY_ID[tileId];
 
@@ -889,8 +889,10 @@ const calculateRent = (properties, players, tileId, landingPlayerId, diceTotal) 
   if (tile.type === TILE_TYPES.PROPERTY) {
     if (prop.hotel)       return tile.rent[5];
     if (prop.houses > 0)  return tile.rent[prop.houses];
+    const groupTiles = getColorGroupTiles(tileId);
+    const anyMortgaged = groupTiles.some((id) => properties[id]?.mortgaged);
     const monopoly = hasMonopoly(properties, prop.ownerId, tileId);
-    return monopoly ? tile.rent[0] * 2 : tile.rent[0];
+    return monopoly && !anyMortgaged ? tile.rent[0] * 2 : tile.rent[0];
   }
 
   return 0;
@@ -949,6 +951,10 @@ const canBuildHouse = (properties, playerId, tileId) => {
     return { canBuild: false, reason: 'Must own the entire color group first' };
 
   const groupTiles  = getColorGroupTiles(tileId);
+  const hasMortgaged = groupTiles.some((id) => properties[id]?.mortgaged);
+  if (hasMortgaged) {
+    return { canBuild: false, reason: 'Cannot build if any property in the color group is mortgaged' };
+  }
   const otherCounts = groupTiles
     .filter((id) => id !== tileId)
     .map((id) => {
@@ -979,6 +985,18 @@ const canBuildHotel = (properties, playerId, tileId) => {
     return { canBuild: false, reason: `Need 4 houses first (currently ${prop.houses})` };
   if (!hasMonopoly(properties, playerId, tileId))
     return { canBuild: false, reason: 'Must own the entire color group' };
+
+  const groupTiles = getColorGroupTiles(tileId);
+  const hasMortgaged = groupTiles.some((id) => properties[id]?.mortgaged);
+  if (hasMortgaged) {
+    return { canBuild: false, reason: 'Cannot build if any property in the color group is mortgaged' };
+  }
+  const siblingsHaveFour = groupTiles.every(
+    (id) => properties[id].hotel || properties[id].houses >= 4
+  );
+  if (!siblingsHaveFour) {
+    return { canBuild: false, reason: 'All properties in the group must have 4 houses before building a hotel' };
+  }
 
   return { canBuild: true, reason: null };
 };

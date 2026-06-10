@@ -56,7 +56,9 @@ const {
   findNearestTile,
   countRailwaysOwned,
   countUtilitiesOwned,
+  getColorGroupTiles,
 } = require('./boardData');
+
 
 const {
   EFFECT_TYPES,
@@ -791,8 +793,12 @@ const mortgageProperty = (gameState, playerId, tileId) => {
   if (!tile || !prop)               return fail('Invalid tile');
   if (prop.ownerId !== playerId)    return fail('You do not own this property');
   if (prop.mortgaged)               return fail('Already mortgaged');
-  if (prop.houses > 0 || prop.hotel) {
-    return fail('Sell all buildings on this property before mortgaging');
+  const groupTiles = getColorGroupTiles(tileId);
+  const hasBuildings = groupTiles.some(
+    (id) => gameState.properties[id]?.houses > 0 || gameState.properties[id]?.hotel
+  );
+  if (hasBuildings) {
+    return fail('Must sell all buildings in the color group before mortgaging');
   }
 
   prop.mortgaged  = true;
@@ -1587,7 +1593,9 @@ const endTurn = (gameState, playerId) => {
   if (player && player.money < 0) {
     return fail('You cannot end your turn with a negative balance! Sell buildings, mortgage properties, take a loan, or declare bankruptcy first.');
   }
-
+  if (player) {
+    player.creditorId = null;
+  }
   if (!gameState.hasRolled) {
     return fail('You must roll the dice before ending your turn');
   }
@@ -1802,6 +1810,9 @@ const initiateTrade = (gameState, fromPlayerId, toPlayerId, offer, request) => {
   if (!toPlayer   || toPlayer.isBankrupt)   return fail('Target player is not active');
   if (fromPlayerId === toPlayerId)           return fail('Cannot trade with yourself');
   if (gameState.activeTrade)                return fail('A trade is already in progress');
+  if (fromPlayer.money < 0 || toPlayer.money < 0) {
+    return fail('Players in debt cannot participate in trades');
+  }
 
   if (!offer || !request) {
     return fail('Invalid trade payload');
@@ -1835,6 +1846,17 @@ const initiateTrade = (gameState, fromPlayerId, toPlayerId, offer, request) => {
   for (const tileId of (request.propertyIds ?? [])) {
     if (gameState.properties[tileId]?.ownerId !== toPlayerId) {
       return fail(`Target player does not own property at tile ${tileId}`);
+    }
+  }
+
+  const allIds = [...(offer.propertyIds || []), ...(request.propertyIds || [])];
+  for (const tileId of allIds) {
+    const groupTiles = getColorGroupTiles(tileId);
+    const groupHasBuildings = groupTiles.some(
+      (id) => gameState.properties[id]?.houses > 0 || gameState.properties[id]?.hotel
+    );
+    if (groupHasBuildings) {
+      return fail('Cannot trade properties in a color group that contains houses or hotels');
     }
   }
 
@@ -1878,6 +1900,10 @@ const acceptTrade = (gameState, playerId) => {
   const toPlayer   = gameState.players[trade.toPlayerId];
 
   // Final validation before execution (balances may have changed)
+  if (fromPlayer.money < 0 || toPlayer.money < 0) {
+    gameState.activeTrade = null;
+    return fail('Players in debt cannot participate in trades — trade cancelled');
+  }
   if (fromPlayer.money < trade.offer.money) {
     gameState.activeTrade = null;
     return fail('Proposer no longer has sufficient funds — trade cancelled');
@@ -1886,7 +1912,19 @@ const acceptTrade = (gameState, playerId) => {
     gameState.activeTrade = null;
     return fail('You no longer have sufficient funds — trade cancelled');
   }
-
+  // Validate that offered and requested properties are still owned by the respective parties
+  for (const tileId of trade.offer.propertyIds) {
+    if (gameState.properties[tileId]?.ownerId !== trade.fromPlayerId) {
+      gameState.activeTrade = null;
+      return fail('Offer properties are no longer owned by the proposer — trade cancelled');
+    }
+  }
+  for (const tileId of trade.request.propertyIds) {
+    if (gameState.properties[tileId]?.ownerId !== trade.toPlayerId) {
+      gameState.activeTrade = null;
+      return fail('Requested properties are no longer owned by the recipient — trade cancelled');
+    }
+  }
   // ── Execute transfers ────────────────────────────────────────────────────
   // Money
   fromPlayer.money -= trade.offer.money;
@@ -1984,14 +2022,15 @@ const cancelTrade = (gameState, playerId) => {
  * @param {number} tileId
  * @returns {GameEvent}
  */
-const _startAuction = (gameState, tileId) => {
+const _startAuction = (gameState, tileId, disqualifiedPlayerIds = [], ownerId = null) => {
   const tile            = TILE_BY_ID[tileId];
   const activePlayers   = Object.values(gameState.players)
-    .filter((p) => !p.isBankrupt)
+    .filter((p) => !p.isBankrupt && !disqualifiedPlayerIds.includes(p.id) && (!ownerId || p.id !== ownerId))
     .map((p) => p.id);
 
   gameState.activeAuction = {
     tileId,
+    ownerId,
     highBid:       0,
     highBidderId:  null,
     bids:          {},          // { [playerId]: amount }
@@ -2004,7 +2043,7 @@ const _startAuction = (gameState, tileId) => {
 
   return evt(
     EVENT_TYPES.AUCTION_STARTED,
-    { tileId, tile, minimumBid: 1, participants: activePlayers },
+    { tileId, tile, minimumBid: 1, participants: activePlayers, ownerId },
     `🔨 Auction started for ${tile.name}! Minimum bid: ₹1`,
   );
 };
@@ -2025,6 +2064,9 @@ const placeBid = (gameState, playerId, amount) => {
   if (!player || player.isBankrupt)           return fail('Invalid player');
   if (!auction.participants.includes(playerId)) return fail('You are not part of this auction');
   if (auction.passedPlayers.includes(playerId)) return fail('You already passed on this auction');
+  if (typeof amount !== 'number' || !Number.isInteger(amount) || amount < 1) {
+    return fail('Bid amount must be a valid positive integer');
+  }
   if (amount <= auction.highBid)              return fail(`Bid must exceed current high bid of ₹${fmt(auction.highBid)}`);
   if (amount > player.money)                  return fail('Insufficient funds for this bid');
 
@@ -2040,6 +2082,13 @@ const placeBid = (gameState, playerId, amount) => {
   )];
 
   _appendLog(gameState, events);
+
+  const remaining = auction.participants.filter((id) => !auction.passedPlayers.includes(id));
+  if (remaining.length === 1) {
+    const concludeEvents = _concludeAuction(gameState);
+    events.push(...concludeEvents);
+  }
+
   return ok(events);
 };
 
@@ -2065,7 +2114,7 @@ const passAuction = (gameState, playerId) => {
   const events = [];
   const remaining = auction.participants.filter((id) => !auction.passedPlayers.includes(id));
 
-  if (remaining.length === 0) {
+  if (remaining.length === 0 || (remaining.length === 1 && auction.highBidderId)) {
     // Auction over
     const concludeEvents = _concludeAuction(gameState);
     events.push(...concludeEvents);
@@ -2089,6 +2138,53 @@ const _concludeAuction = (gameState) => {
 
   if (auction.highBidderId && auction.highBid > 0) {
     const winner    = gameState.players[auction.highBidderId];
+    if (winner.money < auction.highBid) {
+      events.push(evt(
+        EVENT_TYPES.AUCTION_NO_SALE,
+        { tileId: auction.tileId },
+        `⚠️ ${winner.username} has insufficient funds (₹${fmt(winner.money)}) to pay the winning bid of ₹${fmt(auction.highBid)}!`,
+      ));
+
+      const tileId = auction.tileId;
+      const ownerId = auction.ownerId || null;
+      
+      const otherParticipants = Object.values(gameState.players)
+        .filter((p) => !p.isBankrupt && p.id !== winner.id && (!ownerId || p.id !== ownerId))
+        .map((p) => p.id);
+
+      if (otherParticipants.length > 0) {
+        gameState.activeAuction = null;
+        gameState.pendingAction  = null;
+        const restartEvent = _startAuction(gameState, tileId, [winner.id], ownerId);
+        events.push(restartEvent);
+        return events;
+      } else {
+        // No other eligible bidders, treat as regular no-sale
+        events.push(evt(
+          EVENT_TYPES.AUCTION_NO_SALE,
+          { tileId: auction.tileId },
+          hasSeller
+            ? `${tile.name} has no other eligible bidders — remains owned by ${gameState.players[auction.ownerId].username}`
+            : `${tile.name} has no other eligible bidders — remains unsold`,
+        ));
+        
+        gameState.activeAuction = null;
+        gameState.pendingAction  = null;
+
+        if (!hasSeller) {
+          if (gameState.queuedAuctions && gameState.queuedAuctions.length > 0) {
+            const nextTileId = gameState.queuedAuctions.shift();
+            const auctionEvent = _startAuction(gameState, nextTileId);
+            events.push(auctionEvent);
+          } else {
+            const turnEvents = _advanceTurn(gameState);
+            events.push(...turnEvents);
+          }
+        }
+        return events;
+      }
+    }
+
     winner.money   -= auction.highBid;
     gameState.properties[auction.tileId].ownerId = auction.highBidderId;
     winner.propertiesPurchasedCount = (winner.propertiesPurchasedCount ?? 0) + 1;
@@ -2504,7 +2600,7 @@ const declareBankruptcy = (gameState, playerId) => {
   const player = gameState.players[playerId];
   if (!player || player.isBankrupt) return fail('Invalid player');
 
-  const creditorId = player.creditorId || null;
+  const creditorId = player.money >= 0 ? null : (player.creditorId || null);
   const events = _processBankruptcy(gameState, playerId, creditorId);
 
   // If it was their turn, advance the turn, unless an auction is now pending

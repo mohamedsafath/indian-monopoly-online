@@ -4,3 +4,5 @@ dist
 build
 .vscode
 .DS_Store
+backend/feedback_fallback.json
+backend/rooms_fallback.json

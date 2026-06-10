@@ -109,7 +109,7 @@ export default function AdminDashboard() {
       const res = await fetch(`${BACKEND_URL}/api/admin/metrics`, {
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-email': currentUser.email
+          'x-admin-secret': import.meta.env.VITE_ADMIN_SECRET || 'SafathSruthiAdminSecret2026!'
         }
       });
       const data = await res.json();
@@ -132,7 +132,7 @@ export default function AdminDashboard() {
       const res = await fetch(`${BACKEND_URL}/api/admin/feedback`, {
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-email': currentUser.email
+          'x-admin-secret': import.meta.env.VITE_ADMIN_SECRET || 'SafathSruthiAdminSecret2026!'
         }
       });
       const data = await res.json();
@@ -155,7 +155,7 @@ export default function AdminDashboard() {
       const res = await fetch(`${BACKEND_URL}/api/admin/players`, {
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-email': currentUser.email
+          'x-admin-secret': import.meta.env.VITE_ADMIN_SECRET || 'SafathSruthiAdminSecret2026!'
         }
       });
       const data = await res.json();
@@ -200,7 +200,7 @@ export default function AdminDashboard() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-email': currentUser.email
+          'x-admin-secret': import.meta.env.VITE_ADMIN_SECRET || 'SafathSruthiAdminSecret2026!'
         },
         body: JSON.stringify({ message: broadcastMessage })
       });
@@ -228,7 +228,7 @@ export default function AdminDashboard() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-admin-email': currentUser.email
+          'x-admin-secret': import.meta.env.VITE_ADMIN_SECRET || 'SafathSruthiAdminSecret2026!'
         },
         body: JSON.stringify({ roomCode })
       });

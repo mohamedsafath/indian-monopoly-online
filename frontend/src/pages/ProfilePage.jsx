@@ -226,7 +226,8 @@ export default function ProfilePage() {
         const res = await fetch(`${BACKEND_URL}/api/auth/update-avatar`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            ...(currentUser?.token ? { 'Authorization': `Bearer ${currentUser.token}` } : {})
           },
           body: JSON.stringify({
             playerId: player.playerId,

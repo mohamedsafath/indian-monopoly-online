@@ -1,0 +1,8 @@
+{
+  "ignore": [
+    "rooms_fallback.json",
+    "users_fallback.json",
+    "feedback_fallback.json",
+    "node_modules/**"
+  ]
+}

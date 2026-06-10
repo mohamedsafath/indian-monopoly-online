@@ -138,9 +138,13 @@ export default function ResultPage() {
             // Sync updated stats to persistent backend server database
             if (!user.isGuest) {
               const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5001';
+              const headers = { 'Content-Type': 'application/json' };
+              if (user.token) {
+                headers['Authorization'] = `Bearer ${user.token}`;
+              }
               fetch(`${BACKEND_URL}/api/auth/update-stats`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({
                   playerId: user.playerId,
                   wins: user.wins,

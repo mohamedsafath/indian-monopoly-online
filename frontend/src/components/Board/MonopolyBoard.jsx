@@ -690,7 +690,7 @@ export const MonopolyBoard = React.memo(function MonopolyBoard({
 
 
       {/* Build panel */}
-      {showBuildPanel && isMyTurn && (
+      {showBuildPanel && (
         <BuildPanel
           gameState={gameState}
           myId={myId}
