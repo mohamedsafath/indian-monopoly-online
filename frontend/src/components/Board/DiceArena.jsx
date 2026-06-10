@@ -22,9 +22,9 @@ function DieFace({ value, rolling, endRotation }) {
   return (
     <div
       style={{
-        width:        80,
-        height:       80,
-        borderRadius: 16,
+        width:        'var(--die-size, 80px)',
+        height:       'var(--die-size, 80px)',
+        borderRadius: 'var(--die-border-radius, 16px)',
         background:   'linear-gradient(135deg, #ffffff 0%, #f0f0f0 50%, #e0e0e0 100%)',
         border:       '2px solid rgba(0,0,0,0.3)',
         boxShadow:    '0 10px 28px rgba(0,0,0,0.65), inset 0 2.5px 2.5px rgba(255,255,255,0.9)',
@@ -69,7 +69,7 @@ export const DiceArena = React.memo(function DiceArena({
       flexDirection:  'column',
       alignItems:     'center',
       justifyContent: 'center',
-      gap:            12,
+      gap:            'var(--dice-arena-gap, 12px)',
       width:          '100%',
       height:         '100%',
     }}>
@@ -77,7 +77,7 @@ export const DiceArena = React.memo(function DiceArena({
       {/* Turn indicator */}
       {currentPlayer && (
         <div style={{
-          fontSize:       14,
+          fontSize:       'var(--die-font-size, 14px)',
           fontWeight:     800,
           letterSpacing:  '0.06em',
           textTransform:  'uppercase',
@@ -85,7 +85,7 @@ export const DiceArena = React.memo(function DiceArena({
           textAlign:      'center',
           lineHeight:     1.3,
           textShadow:     `0 0 12px ${currentPlayer.color}88`,
-          padding:        '4px 12px',
+          padding:        'var(--center-toast-padding, 4px 12px)',
           borderRadius:   8,
           background:     `${currentPlayer.color}18`,
           border:         `1px solid ${currentPlayer.color}40`,
@@ -100,7 +100,7 @@ export const DiceArena = React.memo(function DiceArena({
 
       {/* Dice display */}
       {displayDice ? (
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 'var(--dice-arena-gap, 12px)', alignItems: 'center' }}>
           <DieFace
             value={displayDice.d1}
             rolling={dicePhase === 'rolling' ? 'rolling' : dicePhase === 'landing' ? 'landing' : 'none'}
@@ -113,7 +113,7 @@ export const DiceArena = React.memo(function DiceArena({
           />
         </div>
       ) : (
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', opacity: 0.6 }}>
+        <div style={{ display: 'flex', gap: 'var(--dice-arena-gap, 12px)', alignItems: 'center', opacity: 0.6 }}>
           <DieFace value={1} rolling="none" endRotation={-15} />
           <DieFace value={1} rolling="none" endRotation={12} />
         </div>
@@ -122,7 +122,7 @@ export const DiceArena = React.memo(function DiceArena({
       {/* Total + double indicator */}
       {isShowing && displayDice && (
         <div style={{
-          fontSize:    14,
+          fontSize:    'var(--die-font-size, 14px)',
           fontWeight:  800,
           color:       displayDice.d1 === displayDice.d2 ? '#f59e0b' : 'rgba(255,255,255,0.7)',
           letterSpacing: '0.05em',
@@ -137,12 +137,12 @@ export const DiceArena = React.memo(function DiceArena({
         <button
           onClick={onRoll}
           style={{
-            padding:        '10px 22px',
+            padding:        'var(--die-button-padding, 10px 22px)',
             borderRadius:   10,
             background:     'linear-gradient(135deg, #d97706, #f59e0b)',
             color:          '#0a0805',
             fontWeight:     900,
-            fontSize:       13,
+            fontSize:       'var(--die-button-font, 13px)',
             letterSpacing:  '0.08em',
             textTransform:  'uppercase',
             border:         'none',

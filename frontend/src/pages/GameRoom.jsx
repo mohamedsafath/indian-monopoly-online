@@ -1179,6 +1179,15 @@ export default function GameRoom() {
           --corner-sub-margin: 4px;
           --token-size: 28px;
           --token-font-size: 15px;
+          --board-title-size: 16px;
+          --die-size: 80px;
+          --die-border-radius: 16px;
+          --dice-arena-gap: 12px;
+          --die-font-size: 14px;
+          --die-button-padding: 10px 22px;
+          --die-button-font: 13px;
+          --center-toast-font-size: 11px;
+          --center-toast-padding: 7px 16px;
         }
         
         @media (min-width: 1024px) {
@@ -1223,6 +1232,15 @@ export default function GameRoom() {
             --corner-sub-margin: 1px;
             --token-size: 18px;
             --token-font-size: 10px;
+            --board-title-size: 10px;
+            --die-size: 46px;
+            --die-border-radius: 9px;
+            --dice-arena-gap: 6px;
+            --die-font-size: 10px;
+            --die-button-padding: 5px 12px;
+            --die-button-font: 9.5px;
+            --center-toast-font-size: 8.5px;
+            --center-toast-padding: 4px 10px;
           }
         }
       `}</style>
