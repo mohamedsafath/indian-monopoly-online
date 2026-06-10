@@ -93,145 +93,57 @@ const verifyPlayerAuth = (req, res, next) => {
   }
 };
 
-// Temporary OTP store with email association
-const pendingOtps = new Map();
-
 // Authentication Router
 const authRouter = express.Router();
 
-// 1. Request verification OTP during registration
-authRouter.post("/register-request", async (req, res) => {
-  try {
-    const { username, email } = req.body;
-    if (!username || !email) {
-      return res.status(400).json({ ok: false, error: "Please fill in all fields." });
-    }
-    const targetEmail = email.trim().toLowerCase();
-    
-    // Validate Gmail email suffix
-    if (!targetEmail.endsWith("@gmail.com")) {
-      return res.status(400).json({ ok: false, error: "Please use a valid Gmail account (@gmail.com)." });
-    }
-    
-    if (username.trim().length < 2) {
-      return res.status(400).json({ ok: false, error: "Full Name must be at least 2 characters." });
-    }
-    
-    // Check if duplicate email already registered
-    const { findUserByEmail } = require("./socket/userModel");
-    const existing = await findUserByEmail(targetEmail);
-    if (existing) {
-      return res.status(400).json({ ok: false, error: "This Gmail account is already registered! Please Sign In." });
-    }
-    
-    // Generate a 6-digit verification code
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    pendingOtps.set(targetEmail, {
-      username: username.trim(),
-      email: targetEmail,
-      otp,
-      expiresAt: Date.now() + 5 * 60 * 1000 // 5 minutes TTL
-    });
-    
-    // Dispatch real email or fallback to console logs if SMTP credentials are not configured
-    const { sendOtpEmail } = require("./services/emailService");
-    const mailResult = await sendOtpEmail(targetEmail, otp);
-    
-    res.json({
-      ok: true,
-      message: mailResult.fallback
-        ? "SMTP credentials not configured on backend. Falling back to console logging."
-        : "A 6-digit verification code has been delivered directly to your Gmail inbox.",
-      fallback: mailResult.fallback,
-      debugOtp: mailResult.fallback ? otp : undefined
-    });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
-// 2. Verify OTP and complete registration
-authRouter.post("/register-verify", async (req, res) => {
-  try {
-    const { email, otp } = req.body;
-    if (!email || !otp) {
-      return res.status(400).json({ ok: false, error: "Missing email or OTP verification code." });
-    }
-    const targetEmail = email.trim().toLowerCase();
-    const cleanOtp = otp.trim();
-    
-    const record = pendingOtps.get(targetEmail);
-    if (!record) {
-      return res.status(400).json({ ok: false, error: "No pending registration request found." });
-    }
-    
-    if (Date.now() > record.expiresAt) {
-      pendingOtps.delete(targetEmail);
-      return res.status(400).json({ ok: false, error: "Verification code expired. Please request a new code." });
-    }
-    
-    if (record.otp !== cleanOtp) {
-      return res.status(400).json({ ok: false, error: "Invalid verification code. Please try again." });
-    }
-    
-    // OTP matches! Register user in persistent DB or in-memory registry
-    const { registerUser } = require("./socket/userModel");
-    const user = await registerUser(record.username, record.email);
-    
-    // Clean up OTP record
-    pendingOtps.delete(targetEmail);
-    
-    const token = generateToken(user.playerId);
-    res.json({ ok: true, user: { ...user, token } });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
-// 3. User Sign In (Login)
-authRouter.post("/login", async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (!email) {
-      return res.status(400).json({ ok: false, error: "Please enter your Gmail address." });
-    }
-    const targetEmail = email.trim().toLowerCase();
-    
-    const { findUserByEmail } = require("./socket/userModel");
-    const user = await findUserByEmail(targetEmail);
-    
-    if (!user) {
-      return res.status(404).json({ ok: false, error: "Gmail is not registered. Please Sign Up first!" });
-    }
-    
-    const token = generateToken(user.playerId);
-    res.json({ ok: true, user: { ...user, token } });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
-// 3.5. Google Sign-In (Auto-registers user if they do not exist)
+// Google Sign-In (Verifies real Google ID token and auto-registers if not exist)
 authRouter.post("/google-login", async (req, res) => {
   try {
-    const { email, username } = req.body;
-    if (!email) {
-      return res.status(400).json({ ok: false, error: "Missing Gmail address." });
+    const { credential } = req.body;
+    if (!credential) {
+      return res.status(400).json({ ok: false, error: "Missing Google credential token." });
     }
-    const targetEmail = email.trim().toLowerCase();
     
-    if (!targetEmail.endsWith("@gmail.com")) {
-      return res.status(400).json({ ok: false, error: "Please use a valid Gmail address (@gmail.com)." });
+    // Call Google tokeninfo endpoint to verify token authenticity
+    const googleVerifyRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${credential}`);
+    if (!googleVerifyRes.ok) {
+      const errData = await googleVerifyRes.json();
+      return res.status(400).json({ ok: false, error: errData.error_description || "Invalid Google credential." });
     }
+    
+    const payload = await googleVerifyRes.json();
+    
+    // Validate target audience (Google Client ID) to prevent token replay attacks
+    const expectedClientId = process.env.GOOGLE_CLIENT_ID || "498630830975-gad0rf38lrpmbie71oomacuko2ksjm79.apps.googleusercontent.com";
+    if (payload.aud !== expectedClientId) {
+      return res.status(400).json({ ok: false, error: "Token audience mismatch." });
+    }
+    
+    const email = payload.email;
+    const name = payload.name;
+    const picture = payload.picture;
+    
+    if (!email) {
+      return res.status(400).json({ ok: false, error: "Email address not found in Google profile." });
+    }
+    
+    const targetEmail = email.trim().toLowerCase();
     
     const { findUserByEmail, registerUser } = require("./socket/userModel");
     let user = await findUserByEmail(targetEmail);
     
     if (!user) {
-      // Auto-register
-      const defaultName = username || targetEmail.split("@")[0].replace(/[^a-zA-Z0-9]/g, " ");
+      // Auto-register using Google profile name and email
+      const defaultName = name || targetEmail.split("@")[0].replace(/[^a-zA-Z0-9]/g, " ");
       const nameCapitalized = defaultName.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
       user = await registerUser(nameCapitalized, targetEmail);
+    }
+    
+    // Auto-sync real Google avatar image if user has default avatar
+    if (picture && (!user.avatar || user.avatar.includes("dicebear.com"))) {
+      user.avatar = picture;
+      const { updateAvatar } = require("./socket/userModel");
+      await updateAvatar(user.playerId, picture);
     }
     
     const token = generateToken(user.playerId);

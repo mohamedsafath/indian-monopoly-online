@@ -64,90 +64,12 @@ const saveMemoryUsersToFile = () => {
   }
 };
 
-/// 3. Predefined/mock accounts with realistic baseline statistics
-const SEED_USERS = [
-  {
-    playerId: "google_msafath2004_102",
-    username: "MSafath Admin",
-    email: "msafath2004@gmail.com",
-    avatar: "https://api.dicebear.com/7.x/adventurer/svg?seed=MSafath",
-    level: 3,
-    wins: 12,
-    games: 45,
-    losses: 33,
-    loansTaken: 8,
-    propertiesPurchased: 52,
-    totalNetWorthEarned: 245000,
-    propertiesMortgaged: 14,
-    propertiesRepossessed: 3,
-    auctionsWon: 9,
-    rentPaid: 45000,
-    rentEarned: 132000,
-    bankruptcies: 2
-  },
-  {
-    playerId: "google_mariannesruthi_203",
-    username: "Marianne Sruthi",
-    email: "mariannesruthi@gmail.com",
-    avatar: "https://api.dicebear.com/7.x/adventurer/svg?seed=Sruthi",
-    level: 2,
-    wins: 8,
-    games: 32,
-    losses: 24,
-    loansTaken: 4,
-    propertiesPurchased: 35,
-    totalNetWorthEarned: 168000,
-    propertiesMortgaged: 8,
-    propertiesRepossessed: 1,
-    auctionsWon: 6,
-    rentPaid: 32000,
-    rentEarned: 91000,
-    bankruptcies: 1
-  }
-];
-
 /**
- * Seed default mock accounts on startup
+ * Seed default mock accounts on startup (No-op/fallback load only - no hardcoded users)
  */
 const seedDefaultUsers = async () => {
   const dbActive = getIsDbActive();
-  
-  if (dbActive) {
-    try {
-      for (const u of SEED_USERS) {
-        const exists = await User.findOne({ email: u.email.toLowerCase() });
-        if (!exists) {
-          await User.create({
-            playerId: u.playerId,
-            username: u.username,
-            email: u.email.toLowerCase(),
-            avatar: u.avatar,
-            level: u.level,
-            wins: u.wins,
-            games: u.games,
-            losses: u.losses,
-            loansTaken: u.loansTaken,
-            propertiesPurchased: u.propertiesPurchased,
-            totalNetWorthEarned: u.totalNetWorthEarned,
-            propertiesMortgaged: u.propertiesMortgaged,
-            propertiesRepossessed: u.propertiesRepossessed,
-            auctionsWon: u.auctionsWon,
-            rentPaid: u.rentPaid,
-            rentEarned: u.rentEarned,
-            bankruptcies: u.bankruptcies
-          });
-          console.log(`[db] Seeded extended user account: ${u.email}`);
-        }
-      }
-    } catch (err) {
-      console.error("[db] Failed to seed user accounts:", err.message);
-    }
-  } else {
-    // Memory mode: Seed local map
-    for (const u of SEED_USERS) {
-      inMemoryUsers.set(u.email.toLowerCase(), { ...u, email: u.email.toLowerCase() });
-    }
-    console.log(`[memory] Seeded ${SEED_USERS.length} local user accounts with extended stats.`);
+  if (!dbActive) {
     loadMemoryUsersFromFile();
   }
 };
@@ -349,7 +271,9 @@ const getAllRegisteredUsers = async () => {
 const isAdmin = (email) => {
   if (!email) return false;
   const target = email.trim().toLowerCase();
-  return target === 'msafath2004@gmail.com' || target === 'mariannesruthi@gmail.com';
+  const adminEmailsVar = process.env.ADMIN_EMAILS || "msafath2004@gmail.com,mariannesruthi@gmail.com";
+  const adminEmails = adminEmailsVar.split(",").map(e => e.trim().toLowerCase());
+  return adminEmails.includes(target);
 };
 
 const updateAvatar = async (playerId, avatar) => {

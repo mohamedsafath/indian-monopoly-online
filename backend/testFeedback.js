@@ -14,6 +14,7 @@ const path = require('path');
 
 const runTest = async () => {
   console.log("=== STARTING ADMIN & FEEDBACK SYSTEM TESTS ===");
+  process.env.ADMIN_EMAILS = "msafath2004@gmail.com,mariannesruthi@gmail.com";
 
   // 1. Verify admin privilege helper
   console.log("\n1. Verifying admin privilege logic...");

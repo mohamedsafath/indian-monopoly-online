@@ -86,7 +86,9 @@ export default function AdminDashboard() {
         const user = JSON.parse(stored);
         setCurrentUser(user);
         const email = (user.email || '').trim().toLowerCase();
-        if (email === 'msafath2004@gmail.com' || email === 'mariannesruthi@gmail.com') {
+        const adminEmailsVar = import.meta.env.VITE_ADMIN_EMAILS || "msafath2004@gmail.com,mariannesruthi@gmail.com";
+        const adminEmails = adminEmailsVar.split(',').map(e => e.trim().toLowerCase());
+        if (adminEmails.includes(email)) {
           setIsAdminUser(true);
         } else {
           navigate('/home');

@@ -68,36 +68,7 @@ function OrnamentalBorder({ className = '' }) {
   );
 }
 
-// ── Seeded list of users matching screenshot ──
-const ACCOUNTS = [
-  {
-    name: "MOHAMED SAFATH",
-    email: "msafath2004@gmail.com",
-    avatar: "https://api.dicebear.com/7.x/adventurer/svg?seed=MSafath"
-  },
-  {
-    name: "mohamed sameer",
-    email: "sameer732261@gmail.com",
-    avatar: "https://api.dicebear.com/7.x/adventurer/svg?seed=Sameer"
-  },
-  {
-    name: "Marianne Sruthi",
-    email: "mariannesruthi@gmail.com",
-    initial: "M",
-    initialBg: "#6b21a8"
-  },
-  {
-    name: "M Safath",
-    email: "msafath118@gmail.com",
-    avatar: "https://api.dicebear.com/7.x/adventurer/svg?seed=Safath118"
-  },
-  {
-    name: "Rose Berry",
-    email: "roseeberr44@gmail.com",
-    initial: "R",
-    initialBg: "#1e3a8a"
-  }
-];
+// Real Google Sign-in will initialize dynamically via GIS client library
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -108,11 +79,6 @@ export default function LoginPage() {
 
   // View States: 'landing' | 'google_chooser' | 'google_custom'
   const [loginView, setLoginView] = useState('landing');
-
-  // Input states
-  const [customEmail, setCustomEmail] = useState('');
-  const [customName, setCustomName] = useState('');
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -153,16 +119,16 @@ export default function LoginPage() {
     }
   };
 
-  // Google Login API flow
-  const handleGoogleLogin = async (email, username = '') => {
-    if (!email) return;
+  // Google Login API flow using real token credential
+  const handleGoogleLogin = async (credential) => {
+    if (!credential) return;
     setLoading(true);
     setError('');
     try {
       const res = await fetch(`${BACKEND_URL}/api/auth/google-login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, username })
+        body: JSON.stringify({ credential })
       });
       const data = await res.json();
       if (!res.ok) {
@@ -175,24 +141,43 @@ export default function LoginPage() {
       
       navigateToDestination();
     } catch (err) {
-      setError(err.message || 'Failed to connect. Try again.');
+      setError(err.message || 'Google authentication failed. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCustomSubmit = (e) => {
-    e.preventDefault();
-    const email = customEmail.trim();
-    const name = customName.trim();
-    if (!email) {
-      return setError('Please enter your Google Email address.');
+  // Initialize Google Sign-In button
+  useEffect(() => {
+    if (loginView === 'google_chooser') {
+      const checkGoogleInterval = setInterval(() => {
+        if (window.google) {
+          clearInterval(checkGoogleInterval);
+          try {
+            google.accounts.id.initialize({
+              client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || "498630830975-gad0rf38lrpmbie71oomacuko2ksjm79.apps.googleusercontent.com",
+              callback: (response) => {
+                handleGoogleLogin(response.credential);
+              },
+              auto_select: false,
+            });
+            
+            const btnContainer = document.getElementById("google-signin-button");
+            if (btnContainer) {
+              google.accounts.id.renderButton(
+                btnContainer,
+                { theme: "filled_blue", size: "large", width: 280 }
+              );
+            }
+          } catch (err) {
+            console.error("Failed to initialize Google Identity Services:", err);
+          }
+        }
+      }, 100);
+      
+      return () => clearInterval(checkGoogleInterval);
     }
-    if (!email.toLowerCase().endsWith('@gmail.com')) {
-      return setError('Please use a valid Gmail address (@gmail.com).');
-    }
-    handleGoogleLogin(email, name);
-  };
+  }, [loginView]);
 
   // Play as Guest flow
   const handleGuestLogin = () => {
@@ -395,7 +380,7 @@ export default function LoginPage() {
     );
   }
 
-  // ── VIEW 2 & 3: GOOGLE ACCOUNT CHOOSER OR CUSTOM SIGN IN ──
+  // ── VIEW 2: REAL GOOGLE OAUTH SIGN IN ──
   return (
     <div style={{
       minHeight: '100vh',
@@ -414,7 +399,7 @@ export default function LoginPage() {
 
       {/* Main Account Container */}
       <div style={{
-        maxWidth: 820,
+        maxWidth: 500,
         width: '100%',
         margin: '0 auto',
         background: '#131314',
@@ -423,66 +408,58 @@ export default function LoginPage() {
         padding: '36px',
         boxShadow: '0 12px 30px rgba(0,0,0,0.5)',
         display: 'flex',
-        flexDirection: 'row',
-        gap: 40,
-        boxSizing: 'border-box',
-        flexWrap: 'wrap'
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 24,
+        boxSizing: 'border-box'
       }} className="login-card">
         
-        {/* Left Column: Google Branding */}
-        <div style={{
-          flex: '1 1 300px',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          minHeight: 220
-        }}>
-          <div>
-            {/* Top Google Icon Tag */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
-              <GoogleColoredLogo size={18} />
-              <span style={{ fontSize: 13, fontWeight: 500, color: '#e3e3e3', letterSpacing: '0.01em' }}>Sign in with Google</span>
-            </div>
-
-            <AntigravityLogo />
-            
-            <h2 style={{
-              fontSize: 32,
-              fontWeight: 400,
-              color: '#fff',
-              lineHeight: 1.25,
-              margin: '8px 0 12px 0',
-              letterSpacing: '-0.02em'
-            }}>
-              {loginView === 'google_custom' ? 'Sign in' : 'Choose an account'}
-            </h2>
-            
-            <p style={{
-              fontSize: 14,
-              color: '#c4c7c5',
-              margin: 0,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4
-            }}>
-              to continue to <span style={{ color: '#93c5fd', fontWeight: 600 }}>Google Antigravity</span>
-            </p>
+        {/* Google Branding Header */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+            <GoogleColoredLogo size={20} />
+            <span style={{ fontSize: 14, fontWeight: 500, color: '#e3e3e3', letterSpacing: '0.01em' }}>Sign in with Google</span>
           </div>
+
+          <AntigravityLogo />
+          
+          <h2 style={{
+            fontSize: 28,
+            fontWeight: 400,
+            color: '#fff',
+            lineHeight: 1.25,
+            margin: '8px 0 12px 0',
+            letterSpacing: '-0.02em'
+          }}>
+            Choose an account
+          </h2>
+          
+          <p style={{
+            fontSize: 14,
+            color: '#c4c7c5',
+            margin: 0,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4
+          }}>
+            to continue to <span style={{ color: '#93c5fd', fontWeight: 600 }}>Google Antigravity</span>
+          </p>
         </div>
 
-        {/* Right Column: Choices */}
+        {/* Center Section: Real Google Button */}
         <div style={{
-          flex: '1.2 1 340px',
+          width: '100%',
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: 'center',
-          position: 'relative'
+          alignItems: 'center',
+          gap: 20,
+          position: 'relative',
+          padding: '20px 0'
         }}>
-          
           {loading && (
             <div style={{
               position: 'absolute',
-              top: -24,
+              top: 0,
               left: 0,
               right: 0,
               height: 3,
@@ -492,270 +469,67 @@ export default function LoginPage() {
             }} />
           )}
 
-          {loginView === 'google_chooser' ? (
-            /* Choose Account List */
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <div style={{ maxHeight: 380, overflowY: 'auto', paddingRight: 4 }}>
-                {ACCOUNTS.map((acc, idx) => (
-                  <button
-                    key={acc.email}
-                    onClick={() => handleGoogleLogin(acc.email, acc.name)}
-                    disabled={loading}
-                    className="account-item-btn"
-                    style={{
-                      width: '100%',
-                      textAlign: 'left',
-                      background: 'none',
-                      border: 'none',
-                      padding: '16px 12px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      cursor: 'pointer',
-                      borderBottom: '1px solid #2d2e30',
-                      transition: 'background 0.2s',
-                      borderRadius: idx === 0 ? '12px 12px 0 0' : 0,
-                      outline: 'none',
-                      boxSizing: 'border-box'
-                    }}
-                  >
-                    {/* Avatar */}
-                    <div style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: '50%',
-                      background: acc.initialBg || 'rgba(255,255,255,0.05)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      marginRight: 16,
-                      overflow: 'hidden',
-                      flexShrink: 0
-                    }}>
-                      {acc.initial ? (
-                        <span style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>{acc.initial}</span>
-                      ) : (
-                        <img src={acc.avatar} alt="" style={{ width: '100%', height: '100%' }} />
-                      )}
-                    </div>
-                    
-                    {/* Account Texts */}
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: '#e3e3e3' }}>{acc.name}</div>
-                      <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{acc.email}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-
-              {/* Use Another Account Button */}
-              <button
-                onClick={() => { setLoginView('google_custom'); setError(''); }}
-                disabled={loading}
-                className="account-item-btn"
-                style={{
-                  width: '100%',
-                  textAlign: 'left',
-                  background: 'none',
-                  border: 'none',
-                  padding: '16px 12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  cursor: 'pointer',
-                  transition: 'background 0.2s',
-                  outline: 'none',
-                  boxSizing: 'border-box'
-                }}
-              >
-                <div style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: '50%',
-                  border: '1.5px solid rgba(255,255,255,0.15)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginRight: 16,
-                  flexShrink: 0
-                }}>
-                  <span style={{ fontSize: 20, color: '#a8c7fa', fontWeight: 300 }}>+</span>
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#a8c7fa' }}>Use another account</div>
-              </button>
-
-              {/* Return to landing selector options */}
-              <button
-                onClick={() => { setLoginView('landing'); setError(''); }}
-                disabled={loading}
-                className="account-item-btn"
-                style={{
-                  width: '100%',
-                  textAlign: 'left',
-                  background: 'none',
-                  border: 'none',
-                  padding: '16px 12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  cursor: 'pointer',
-                  transition: 'background 0.2s',
-                  borderRadius: '0 0 12px 12px',
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                  borderTop: '1px dashed #2d2e30'
-                }}
-              >
-                <div style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: '50%',
-                  border: '1.5px solid rgba(255,255,255,0.15)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginRight: 16,
-                  flexShrink: 0
-                }}>
-                  <span style={{ fontSize: 14, color: '#94a3b8' }}>↩</span>
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#94a3b8' }}>Go Back (Main Menu)</div>
-              </button>
-
-              {error && (
-                <div style={{
-                  fontSize: 13,
-                  color: '#f87171',
-                  fontWeight: 500,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '12px',
-                  marginTop: 10,
-                  background: 'rgba(248, 113, 113, 0.08)',
-                  border: '1px solid rgba(248, 113, 113, 0.2)',
-                  borderRadius: 8
-                }}>
-                  <span>⚠️</span>
-                  <span>{error}</span>
-                </div>
-              )}
-            </div>
-          ) : (
-            /* Custom Email Input Form */
-            <form onSubmit={handleCustomSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              
-              {/* Google styled outline input for email */}
-              <div style={{ position: 'relative', width: '100%' }}>
-                <input
-                  type="email"
-                  value={customEmail}
-                  onChange={e => setCustomEmail(e.target.value)}
-                  placeholder="Email or phone"
-                  disabled={loading}
-                  style={{
-                    width: '100%',
-                    padding: '16px 14px',
-                    fontSize: 15,
-                    background: 'transparent',
-                    border: '1px solid #8e918f',
-                    borderRadius: 4,
-                    color: '#fff',
-                    outline: 'none',
-                    fontFamily: 'inherit',
-                    boxSizing: 'border-box'
-                  }}
-                  className="google-input"
-                />
-              </div>
-
-              {/* Optional Name field */}
-              <div style={{ position: 'relative', width: '100%' }}>
-                <input
-                  type="text"
-                  value={customName}
-                  onChange={e => setCustomName(e.target.value)}
-                  placeholder="Full name (Optional)"
-                  disabled={loading}
-                  maxLength={18}
-                  style={{
-                    width: '100%',
-                    padding: '16px 14px',
-                    fontSize: 15,
-                    background: 'transparent',
-                    border: '1px solid #8e918f',
-                    borderRadius: 4,
-                    color: '#fff',
-                    outline: 'none',
-                    fontFamily: 'inherit',
-                    boxSizing: 'border-box'
-                  }}
-                  className="google-input"
-                />
-              </div>
-
-              {error && (
-                <div style={{ fontSize: 12, color: '#f87171', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span>⚠️</span>
-                  <span>{error}</span>
-                </div>
-              )}
-
-              {/* Actions */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
-                
-                <button
-                  type="button"
-                  onClick={() => { setLoginView('google_chooser'); setCustomEmail(''); setCustomName(''); setError(''); }}
-                  disabled={loading}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#a8c7fa',
-                    fontSize: 14,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    outline: 'none',
-                    padding: 0
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.color = '#c2e7ff'}
-                  onMouseLeave={e => e.currentTarget.style.color = '#a8c7fa'}
-                >
-                  Back
-                </button>
-
-                <button
-                  type="submit"
-                  disabled={loading || !customEmail}
-                  style={{
-                    padding: '10px 24px',
-                    borderRadius: 20,
-                    fontSize: 14,
-                    fontWeight: 700,
-                    background: loading || !customEmail ? 'rgba(168,199,250,0.1)' : '#a8c7fa',
-                    color: loading || !customEmail ? 'rgba(255,255,255,0.3)' : '#070708',
-                    border: 'none',
-                    cursor: loading || !customEmail ? 'not-allowed' : 'pointer',
-                    outline: 'none',
-                    transition: 'background 0.2s'
-                  }}
-                  onMouseEnter={e => { if (!loading && customEmail) e.currentTarget.style.background = '#c2e7ff'; }}
-                  onMouseLeave={e => { if (!loading && customEmail) e.currentTarget.style.background = '#a8c7fa'; }}
-                >
-                  {loading ? 'Verifying...' : 'Next'}
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* Privacy note */}
-          <div style={{
-            fontSize: 12,
-            color: '#c4c7c5',
-            lineHeight: 1.5,
-            marginTop: 40,
-            borderTop: '1px solid #2d2e30',
-            paddingTop: 16
-          }}>
-            Before using this app, you can review Google Antigravity’s <span style={{ color: '#a8c7fa', cursor: 'pointer' }}>Privacy Policy</span> and <span style={{ color: '#a8c7fa', cursor: 'pointer' }}>Terms of Service</span>.
+          {/* Mount target for the official Google Sign-In button */}
+          <div style={{ minHeight: 45, display: 'flex', justifyContent: 'center', width: '100%' }}>
+            <div id="google-signin-button"></div>
           </div>
+
+          {error && (
+            <div style={{
+              fontSize: 12,
+              color: '#f87171',
+              fontWeight: 500,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              background: 'rgba(248, 113, 113, 0.08)',
+              border: '1px solid rgba(248, 113, 113, 0.2)',
+              padding: '10px 14px',
+              borderRadius: 8,
+              width: '100%',
+              boxSizing: 'border-box'
+            }}>
+              <span>⚠️</span>
+              <span>{error}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Actions - Go Back */}
+        <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+          <button
+            type="button"
+            onClick={() => { setLoginView('landing'); setError(''); }}
+            disabled={loading}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#a8c7fa',
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: 'pointer',
+              outline: 'none',
+              padding: 0
+            }}
+            onMouseEnter={e => e.currentTarget.style.color = '#c2e7ff'}
+            onMouseLeave={e => e.currentTarget.style.color = '#a8c7fa'}
+          >
+            Go Back
+          </button>
+        </div>
+
+        {/* Privacy Note */}
+        <div style={{
+          fontSize: 12,
+          color: '#c4c7c5',
+          lineHeight: 1.5,
+          marginTop: 20,
+          borderTop: '1px solid #2d2e30',
+          paddingTop: 16,
+          width: '100%',
+          textAlign: 'center'
+        }}>
+          Before using this app, you can review Google Antigravity’s <span style={{ color: '#a8c7fa', cursor: 'pointer' }}>Privacy Policy</span> and <span style={{ color: '#a8c7fa', cursor: 'pointer' }}>Terms of Service</span>.
         </div>
       </div>
 
@@ -791,17 +565,8 @@ export default function LoginPage() {
           50% { transform: scaleX(0.5) translateX(50%); }
           100% { transform: scaleX(0.1) translateX(1000%); }
         }
-        .account-item-btn:hover {
-          background: rgba(255, 255, 255, 0.03) !important;
-        }
-        .google-input:focus {
-          border: 2px solid #a8c7fa !important;
-          padding: 15px 13px !important;
-        }
         @media (max-width: 768px) {
           .login-card {
-            flex-direction: column !important;
-            gap: 24px !important;
             padding: 24px !important;
           }
         }
