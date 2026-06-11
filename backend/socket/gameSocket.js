@@ -423,6 +423,7 @@ const startAfkTimer = (io, room) => {
       broadcastEvents(io, room, result.events);
       broadcastGameState(io, room);
       startAfkTimer(io, room);   // restart for next player
+      triggerBotCycle(io, room); // trigger bot cycle in case next player is a bot
     }
   }, TURN_TIMEOUT_SECONDS * 1000);
 };
@@ -647,7 +648,8 @@ const raiseBotCash = (io, room, botId) => {
     const debt = -player.money;
     const amount = Math.min(5000, Math.max(500, Math.ceil(debt / 500) * 500));
     console.log(`🤖 Bot ${player.username} taking loan of ${amount} to resolve debt of ${debt}`);
-    return _dispatch(io, null, room, botId, takeLoan, [amount]);
+    const success = _dispatch(io, null, room, botId, takeLoan, [amount]);
+    if (success) return true;
   }
 
   // 2. Sell hotels
@@ -655,7 +657,8 @@ const raiseBotCash = (io, room, botId) => {
     const prop = gameState.properties[tileId];
     if (prop.ownerId === botId && prop.hotel) {
       console.log(`🤖 Bot ${player.username} selling hotel on tile ${tileId}`);
-      return _dispatch(io, null, room, botId, sellHotel, [Number(tileId)]);
+      const success = _dispatch(io, null, room, botId, sellHotel, [Number(tileId)]);
+      if (success) return true;
     }
   }
 
@@ -664,7 +667,8 @@ const raiseBotCash = (io, room, botId) => {
     const prop = gameState.properties[tileId];
     if (prop.ownerId === botId && prop.houses > 0) {
       console.log(`🤖 Bot ${player.username} selling house on tile ${tileId}`);
-      return _dispatch(io, null, room, botId, sellHouse, [Number(tileId)]);
+      const success = _dispatch(io, null, room, botId, sellHouse, [Number(tileId)]);
+      if (success) return true;
     }
   }
 
@@ -683,9 +687,11 @@ const raiseBotCash = (io, room, botId) => {
       return 0;
     });
 
-    const targetTileId = myProperties[0];
-    console.log(`🤖 Bot ${player.username} mortgaging tile ${targetTileId}`);
-    return _dispatch(io, null, room, botId, mortgageProperty, [targetTileId]);
+    for (const targetTileId of myProperties) {
+      console.log(`🤖 Bot ${player.username} mortgaging tile ${targetTileId}`);
+      const success = _dispatch(io, null, room, botId, mortgageProperty, [targetTileId]);
+      if (success) return true;
+    }
   }
 
   // 5. Declare bankruptcy if no assets left
@@ -874,8 +880,8 @@ const executeBotTurn = async (io, room, botId) => {
         console.log(`🤖 Bot ${player.username} buying property ${tile.name}`);
         _dispatch(io, null, room, botId, buyProperty, []);
       } else {
-        console.log(`🤖 Bot ${player.username} sending property ${tile.name} to auction`);
-        _dispatch(io, null, room, botId, auctionProperty, [tile.id]);
+        console.log(`🤖 Bot ${player.username} declining property ${tile.name} and ending turn`);
+        _dispatch(io, null, room, botId, endTurn, []);
       }
     } else if (gameState.pendingAction === null) {
       const upgraded = upgradeBotProperties(io, room, botId);
@@ -1072,7 +1078,8 @@ const mountGameSocket = (io) => {
       // Reconstruct AFK turn timers for active matches
       if (r.status === 'playing') {
         startAfkTimer(io, r);
-        console.log(`[db] Restarted AFK turn timer for restored room ${r.code}`);
+        triggerBotCycle(io, r);
+        console.log(`[db] Restarted AFK turn timer and bot cycle for restored room ${r.code}`);
       }
     });
   }).catch((err) => {
@@ -2169,6 +2176,18 @@ const mountGameSocket = (io) => {
         }));
 
         console.log(`[room] ${player.username} removed from ${room.code} after grace timeout`);
+
+        // Declare them bankrupt in game state to clean up their assets and advance turn if it was their turn
+        if (room.gameState && room.gameState.players[player.id] && !room.gameState.players[player.id].isBankrupt) {
+          const result = declareBankruptcy(room.gameState, player.id);
+          if (result.ok) {
+            broadcastEvents(io, room, result.events);
+            broadcastGameState(io, room);
+            startAfkTimer(io, room);
+            triggerBotCycle(io, room);
+          }
+        }
+
         saveRoom(room);
 
         // Check end condition
