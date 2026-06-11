@@ -21,6 +21,7 @@ import ConnectionStatus                               from '@/components/GameHUD
 import EndGameModal                                    from '@/components/EndGameModal';
 import BankruptcyModal                                 from '@/components/BankruptcyModal';
 import RuleBookModal                                   from '@/components/RuleBookModal';
+import OnboardingTutorial                              from '@/components/Board/OnboardingTutorial';
 
 import { MonopolyBoard }      from '@/components/Board/MonopolyBoard';
 import { useDiceAnimation }   from '@/hooks/useDiceAnimation';
@@ -331,7 +332,17 @@ export default function GameRoom() {
   const [showBuildPanel, setShowBuildPanel] = useState(false);
   const [showLoanModal, setShowLoanModal] = useState(false);
   const [showRuleBook, setShowRuleBook] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [activeTab,     setActiveTab]     = useState('none'); // 'none' | 'lobby' | 'chat' | 'properties'
+
+  // Auto trigger onboarding tutorial on first-time entry
+  useEffect(() => {
+    const isSpectator = sessionStorage.getItem('mi_isSpectator') === 'true';
+    const hasCompleted = localStorage.getItem('mi_tutorial_completed') === 'true';
+    if (!isSpectator && gameState?.status === 'playing' && !hasCompleted) {
+      setShowOnboarding(true);
+    }
+  }, [gameState?.status]);
   
   // Advanced Chat states
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -1288,6 +1299,26 @@ export default function GameRoom() {
             </span>
           )}
           <button
+            onClick={() => setShowOnboarding(true)}
+            className="hidden md:inline-block px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer mr-2"
+            style={{
+              background: 'rgba(212,175,55,0.08)',
+              color: '#f59e0b',
+              border: '1px solid rgba(212,175,55,0.25)',
+              fontFamily: "'DM Sans', sans-serif",
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'rgba(212,175,55,0.14)';
+              e.currentTarget.style.borderColor = 'rgba(212,175,55,0.6)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'rgba(212,175,55,0.08)';
+              e.currentTarget.style.borderColor = 'rgba(212,175,55,0.25)';
+            }}
+          >
+            🎓 Tutorial
+          </button>
+          <button
             onClick={() => setShowRuleBook(true)}
             className="hidden md:inline-block px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
             style={{
@@ -1915,6 +1946,13 @@ export default function GameRoom() {
                     <h3 className="text-xs font-bold uppercase tracking-widest" style={{ color: 'rgba(212,175,55,0.5)' }}>Players</h3>
                     <div className="flex gap-2">
                       <button
+                        onClick={() => setShowOnboarding(true)}
+                        className="px-2.5 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider bg-yellow-500/10 text-yellow-500 border border-yellow-500/25 transition-all active:scale-95 cursor-pointer mr-1.5"
+                        style={{ fontFamily: "'DM Sans', sans-serif" }}
+                      >
+                        🎓 Tutorial
+                      </button>
+                      <button
                         onClick={() => setShowRuleBook(true)}
                         className="px-2.5 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wider bg-yellow-500/10 text-yellow-500 border border-yellow-500/25 transition-all active:scale-95 cursor-pointer"
                         style={{ fontFamily: "'DM Sans', sans-serif" }}
@@ -2501,6 +2539,15 @@ export default function GameRoom() {
       <RuleBookModal
         isOpen={showRuleBook}
         onClose={() => setShowRuleBook(false)}
+      />
+
+      {/* Onboarding Tutorial Modal */}
+      <OnboardingTutorial
+        isOpen={showOnboarding}
+        onClose={() => {
+          setShowOnboarding(false);
+          localStorage.setItem('mi_tutorial_completed', 'true');
+        }}
       />
 
       {/* Vote Kick Host Modal Overlay */}
