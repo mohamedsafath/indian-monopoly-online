@@ -17,7 +17,7 @@ export default function CreatorFooter() {
       boxSizing: 'border-box'
     }} className="creator-footer-bar">
       <span style={{ fontWeight: 500, letterSpacing: '0.01em', whiteSpace: 'nowrap' }}>
-        Made with ❤️ by Mohamed Safath
+        Designed & Built by Mohamed Safath
       </span>
       <span style={{ color: '#475569', margin: '0 4px' }}>·</span>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
