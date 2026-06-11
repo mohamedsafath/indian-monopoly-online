@@ -22,6 +22,7 @@ import EndGameModal                                    from '@/components/EndGam
 import BankruptcyModal                                 from '@/components/BankruptcyModal';
 import RuleBookModal                                   from '@/components/RuleBookModal';
 import OnboardingTutorial                              from '@/components/Board/OnboardingTutorial';
+import ShortfallPanel                                  from '@/components/Board/ShortfallPanel';
 
 import { MonopolyBoard }      from '@/components/Board/MonopolyBoard';
 import { useDiceAnimation }   from '@/hooks/useDiceAnimation';
@@ -1054,6 +1055,11 @@ export default function GameRoom() {
   const handleSellHotel  = useCallback((tileId) =>
     doAction(`sellHotel${tileId}`, () => socketService.sellHotel(tileId), 'Sell Hotel'),   [doAction]);
 
+  const handleMortgage = useCallback((tileId) =>
+    doAction(`mortgage${tileId}`, () => socketService.mortgageProperty(tileId), 'Mortgage Property'), [doAction]);
+  const handleUnmortgage = useCallback((tileId) =>
+    doAction(`unmortgage${tileId}`, () => socketService.unmortgageProperty(tileId), 'Unmortgage Property'), [doAction]);
+
   // Loan & Bankruptcy actions
   const handleTakeLoan = useCallback((amount) =>
     doAction('takeLoan', () => socketService.takeLoan(amount), 'Take Loan'), [doAction]);
@@ -1476,90 +1482,108 @@ export default function GameRoom() {
 
         {/* Left sidebar */}
         <aside className="hidden lg:flex w-60 flex-col gap-0 flex-shrink-0 overflow-hidden"
-          style={{ borderRight:'1px solid rgba(255,255,255,0.05)' }}>
-          <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3">
-
-            <h3 className="text-xs font-bold uppercase tracking-widest"
-              style={{ color:'rgba(212,175,55,0.5)' }}>Players</h3>
-
-            {players.length === 0
-              ? <p className="text-xs" style={{ color:'rgba(156,163,175,0.3)' }}>No players found</p>
-              : players.map((p, i) => (
-                <PlayerCard key={p.id} player={p} index={i}
-                  isCurrentTurn={p.id === currentPlayerId} isMe={p.id === myId}
-                  isViewerSpectator={sessionStorage.getItem('mi_isSpectator') === 'true'} />
-              ))
-            }
-
-            <div style={{ height:'1px', background:'rgba(255,255,255,0.05)' }} />
-
-            <h3 className="text-xs font-bold uppercase tracking-widest"
-              style={{ color:'rgba(212,175,55,0.5)' }}>Live Events</h3>
-
-            <div className="flex flex-col gap-1 overflow-y-auto" style={{ maxHeight:'220px', minHeight:'60px' }}>
-              {events.length === 0
-                ? <p className="text-xs" style={{ color:'rgba(156,163,175,0.25)' }}>No events yet…</p>
-                : events.slice(-30).map((ev, i) => (
-                  <p key={i} className="text-xs leading-snug"
-                    style={{
-                      color: ev.type === 'system' ? 'rgba(245,158,11,0.6)' : 'rgba(209,213,219,0.55)',
-                      fontFamily:"'DM Sans',sans-serif",
-                      borderLeft: ev.type === 'system' ? '2px solid rgba(245,158,11,0.3)' : '2px solid rgba(255,255,255,0.06)',
-                      paddingLeft: '6px',
-                    }}>
-                    {ev.message}
-                  </p>
-                ))
-              }
-              <div ref={eventEndRef} />
+          style={{ borderRight:'1px solid rgba(255,255,255,0.05)', background: isMyTurn && me?.money < 0 ? 'rgba(239, 68, 68, 0.01)' : 'transparent' }}>
+          {isMyTurn && me?.money < 0 ? (
+            <div className="flex-1 flex flex-col p-3 overflow-hidden">
+              <ShortfallPanel
+                me={me}
+                myProperties={myProperties}
+                gameState={gameState}
+                onMortgage={handleMortgage}
+                onUnmortgage={handleUnmortgage}
+                onSellHouse={handleSellHouse}
+                onSellHotel={handleSellHotel}
+                onTakeLoan={handleTakeLoan}
+                onDeclareBankruptcy={handleDeclareBankruptcy}
+              />
             </div>
-          </div>
+          ) : (
+            <>
+              <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3">
 
-          {/* Controls */}
-          <div className="p-3 flex flex-col gap-2 flex-shrink-0"
-            style={{ borderTop:'1px solid rgba(255,255,255,0.06)' }}>
-            <h3 className="text-xs font-bold uppercase tracking-widest mb-1"
-              style={{ color:'rgba(212,175,55,0.5)' }}>
-              {isMyTurn ? '⚡ Your Actions' : 'Actions'}
-            </h3>
+                <h3 className="text-xs font-bold uppercase tracking-widest"
+                  style={{ color:'rgba(212,175,55,0.5)' }}>Players</h3>
 
-            <ActionButton label="🎲 Roll Dice"
-              onClick={handleRollDice} disabled={!canRoll}
-              loading={actionLoading === 'roll'} variant="primary" />
-
-            {canPayJail && (
-              <ActionButton label="💸 Pay Jail Fine ₹500"
-                onClick={handlePayJail} disabled={!canPayJail}
-                loading={actionLoading === 'jail'} variant="danger" />
-            )}
-
-            <ActionButton label="✔ End Turn"
-              onClick={handleEndTurn} disabled={!canEnd}
-              loading={actionLoading === 'end'} variant="secondary" />
-
-            {!isMyTurn && gameState && (
-              <p className="text-xs text-center mt-1"
-                style={{ color:'rgba(156,163,175,0.35)' }}>
-                Waiting for {gameState.players?.[currentPlayerId]?.username ?? '…'}
-              </p>
-            )}
-
-            {/* Pending card draw hint */}
-            {boardAnimation.pendingCardDraw && (
-              <div style={{
-                padding: '6px 8px', borderRadius: 8,
-                background: boardAnimation.pendingCardDraw.deck === 'chance' ? 'rgba(245,158,11,0.08)' : 'rgba(59,130,246,0.08)',
-                border: `1px solid ${boardAnimation.pendingCardDraw.deck === 'chance' ? 'rgba(245,158,11,0.25)' : 'rgba(59,130,246,0.25)'}`,
-                fontSize: 10, color: boardAnimation.pendingCardDraw.deck === 'chance' ? '#fbbf24' : '#93c5fd',
-                textAlign: 'center', fontWeight: 600,
-              }}>
-                {boardAnimation.pendingCardDraw.playerId === myId
-                  ? `Click ${boardAnimation.pendingCardDraw.deck === 'chance' ? 'Chance ❓' : 'Community 📦'} deck!`
-                  : `Waiting for ${gameState?.players?.[boardAnimation.pendingCardDraw.playerId]?.username ?? '…'} to draw…`
+                {players.length === 0
+                  ? <p className="text-xs" style={{ color:'rgba(156,163,175,0.3)' }}>No players found</p>
+                  : players.map((p, i) => (
+                    <PlayerCard key={p.id} player={p} index={i}
+                      isCurrentTurn={p.id === currentPlayerId} isMe={p.id === myId}
+                      isViewerSpectator={sessionStorage.getItem('mi_isSpectator') === 'true'} />
+                  ))
                 }
+
+                <div style={{ height:'1px', background:'rgba(255,255,255,0.05)' }} />
+
+                <h3 className="text-xs font-bold uppercase tracking-widest"
+                  style={{ color:'rgba(212,175,55,0.5)' }}>Live Events</h3>
+
+                <div className="flex flex-col gap-1 overflow-y-auto" style={{ maxHeight:'220px', minHeight:'60px' }}>
+                  {events.length === 0
+                    ? <p className="text-xs" style={{ color:'rgba(156,163,175,0.25)' }}>No events yet…</p>
+                    : events.slice(-30).map((ev, i) => (
+                      <p key={i} className="text-xs leading-snug"
+                        style={{
+                          color: ev.type === 'system' ? 'rgba(245,158,11,0.6)' : 'rgba(209,213,219,0.55)',
+                          fontFamily:"'DM Sans',sans-serif",
+                          borderLeft: ev.type === 'system' ? '2px solid rgba(245,158,11,0.3)' : '2px solid rgba(255,255,255,0.06)',
+                          paddingLeft: '6px',
+                        }}>
+                        {ev.message}
+                      </p>
+                    ))
+                  }
+                  <div ref={eventEndRef} />
+                </div>
               </div>
-            )}
-          </div>
+
+              {/* Controls */}
+              <div className="p-3 flex flex-col gap-2 flex-shrink-0"
+                style={{ borderTop:'1px solid rgba(255,255,255,0.06)' }}>
+                <h3 className="text-xs font-bold uppercase tracking-widest mb-1"
+                  style={{ color:'rgba(212,175,55,0.5)' }}>
+                  {isMyTurn ? '⚡ Your Actions' : 'Actions'}
+                </h3>
+
+                <ActionButton label="🎲 Roll Dice"
+                  onClick={handleRollDice} disabled={!canRoll}
+                  loading={actionLoading === 'roll'} variant="primary" />
+
+                {canPayJail && (
+                  <ActionButton label="💸 Pay Jail Fine ₹500"
+                    onClick={handlePayJail} disabled={!canPayJail}
+                    loading={actionLoading === 'jail'} variant="danger" />
+                )}
+
+                <ActionButton label="✔ End Turn"
+                  onClick={handleEndTurn} disabled={!canEnd}
+                  loading={actionLoading === 'end'} variant="secondary" />
+
+                {!isMyTurn && gameState && (
+                  <p className="text-xs text-center mt-1"
+                    style={{ color:'rgba(156,163,175,0.35)' }}>
+                    Waiting for {gameState.players?.[currentPlayerId]?.username ?? '…'}
+                  </p>
+                )}
+
+                {/* Pending card draw hint */}
+                {boardAnimation.pendingCardDraw && (
+                  <div style={{
+                    padding: '6px 8px', borderRadius: 8,
+                    background: boardAnimation.pendingCardDraw.deck === 'chance' ? 'rgba(245,158,11,0.08)' : 'rgba(59,130,246,0.08)',
+                    border: `1px solid ${boardAnimation.pendingCardDraw.deck === 'chance' ? 'rgba(245,158,11,0.25)' : 'rgba(59,130,246,0.25)'}`,
+                    fontSize: 10, color: boardAnimation.pendingCardDraw.deck === 'chance' ? '#fbbf24' : '#93c5fd',
+                    textAlign: 'center', fontWeight: 600,
+                  }}>
+                    {boardAnimation.pendingCardDraw.playerId === myId
+                      ? `Click ${boardAnimation.pendingCardDraw.deck === 'chance' ? 'Chance ❓' : 'Community 📦'} deck!`
+                      : `Waiting for ${gameState?.players?.[boardAnimation.pendingCardDraw.playerId]?.username ?? '…'} to draw…`
+                    }
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </aside>
 
         {/* Board */}
@@ -2418,6 +2442,25 @@ export default function GameRoom() {
           <span className="text-[9px] font-extrabold uppercase tracking-wider">Assets</span>
         </button>
       </nav>
+
+      {/* Mobile Shortfall Bottom Sheet Drawer */}
+      {isMyTurn && me?.money < 0 && (
+        <div className="lg:hidden fixed inset-x-0 bottom-16 bg-[#0c0805] border-t-2 border-red-500/40 p-4 z-40 overflow-y-auto max-h-[45vh] rounded-t-2xl shadow-[0_-8px_32px_rgba(0,0,0,0.8)]"
+             style={{ background: 'radial-gradient(circle at top left, #120505 0%, #060303 100%)' }}>
+          <ShortfallPanel
+            me={me}
+            myProperties={myProperties}
+            gameState={gameState}
+            onMortgage={handleMortgage}
+            onUnmortgage={handleUnmortgage}
+            onSellHouse={handleSellHouse}
+            onSellHotel={handleSellHotel}
+            onTakeLoan={handleTakeLoan}
+            onDeclareBankruptcy={handleDeclareBankruptcy}
+            isMobile={true}
+          />
+        </div>
+      )}
 
       {/* Players Management Modal */}
       {showPlayersModal && (
