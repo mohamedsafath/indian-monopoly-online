@@ -831,7 +831,42 @@ const evaluateBotTradeDecision = async (io, room, botId) => {
     _dispatch(io, null, room, botId, acceptTrade, []);
   } else {
     console.log(`🤖 Bot ${player.username} rejecting trade proposal`);
-    sendBotChatMessage(io, room, botId, "Sorry, that trade doesn't make sense for me. I'll have to reject. ❌");
+
+    // Determine specific reason for rejection
+    let breaksMonopolyTile = null;
+    let completesProposerMonopolyTile = null;
+    let botWantsToKeepTile = null;
+
+    for (const propId of (trade.request.propertyIds ?? [])) {
+      const tile = TILE_BY_ID[propId];
+      if (!tile) continue;
+      if (hasMonopoly(gameState.properties, botId, propId)) {
+        breaksMonopolyTile = tile;
+        break;
+      }
+      if (_completesMonopolyForPlayer(gameState, trade.fromPlayerId, propId)) {
+        completesProposerMonopolyTile = tile;
+      }
+      const inSameGroup = BOARD_TILES.some(t => t.id !== propId && t.group === tile.group && gameState.properties[t.id]?.ownerId === botId);
+      if (inSameGroup) {
+        botWantsToKeepTile = tile;
+      }
+    }
+
+    let rejectReason = "Sorry, that trade doesn't make sense for me. I'll have to reject. ❌";
+    if (breaksMonopolyTile) {
+      rejectReason = `I cannot accept this trade because giving away ${breaksMonopolyTile.name} would break my monopoly on that color group! ❌`;
+    } else if (completesProposerMonopolyTile && receiveVal < 1.5 * giveVal) {
+      rejectReason = `Giving you ${completesProposerMonopolyTile.name} would complete a Monopoly for you! You'll need to offer a much larger cash premium for me to consider that. ❌`;
+    } else if (botWantsToKeepTile && receiveVal < giveVal) {
+      rejectReason = `I am currently trying to collect the rest of the properties in the color group for ${botWantsToKeepTile.name}, so I'd need a much better offer to let it go. ❌`;
+    } else if (receiveVal < giveVal) {
+      const ratio = Math.round((receiveVal / (giveVal || 1)) * 100);
+      const fmtVal = (v) => Math.round(v).toLocaleString('en-IN');
+      rejectReason = `This trade is too lopsided. The value I receive is only about ${ratio}% of what I'm giving away (giving value ₹${fmtVal(giveVal)} vs receiving ₹${fmtVal(receiveVal)}). ❌`;
+    }
+
+    sendBotChatMessage(io, room, botId, rejectReason);
     _dispatch(io, null, room, botId, rejectTrade, []);
   }
 };
