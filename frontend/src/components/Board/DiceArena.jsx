@@ -16,6 +16,8 @@ const DOT_POSITIONS = {
   6: [[25, 22], [75, 22], [25, 50], [75, 50], [25, 78], [75, 78]],
 };
 
+import { useState, useRef, useEffect } from 'react';
+
 function DieFace({ value, rolling, endRotation }) {
   const dots = DOT_POSITIONS[value] ?? DOT_POSITIONS[1];
 
@@ -32,7 +34,7 @@ function DieFace({ value, rolling, endRotation }) {
         flexShrink:   0,
         '--die-end-rot': `${endRotation}deg`,
         animation:    rolling === 'rolling'
-          ? 'diceRoll 1.2s ease-in-out forwards'
+          ? 'diceRoll3D 1.2s ease-in-out forwards'
           : rolling === 'landing'
             ? 'diceLand 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards'
             : 'none',
@@ -62,6 +64,61 @@ export const DiceArena = React.memo(function DiceArena({
   const isIdle    = dicePhase === 'idle';
 
   const canRoll   = isMyTurn && isIdle && !hasRolled;
+
+  // Drag-and-Release physics cup states
+  const [dragY, setDragY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartYRef = useRef(0);
+
+  const handleStart = (e) => {
+    if (!canRoll) return;
+    setIsDragging(true);
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    dragStartYRef.current = clientY;
+  };
+
+  const handleMove = (e) => {
+    if (!isDragging) return;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const deltaY = clientY - dragStartYRef.current;
+    const newDragY = Math.min(80, Math.max(0, deltaY));
+    setDragY(newDragY);
+  };
+
+  const handleEnd = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    if (dragY >= 35) {
+      onRoll();
+    }
+    setDragY(0);
+  };
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const onMove = (e) => {
+      // Prevent page scrolling on mobile during cup drag
+      if (e.cancelable) e.preventDefault();
+      handleMove(e);
+    };
+    const onEnd = () => handleEnd();
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onEnd);
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('touchend', onEnd);
+
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onEnd);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onEnd);
+    };
+  }, [isDragging, dragY]);
+
+  const cupScale = 1 + (dragY / 400);
+  const cupRotation = (dragY / 4.5);
 
   return (
     <div style={{
@@ -93,13 +150,84 @@ export const DiceArena = React.memo(function DiceArena({
           overflow:       'hidden',
           textOverflow:   'ellipsis',
           whiteSpace:     'nowrap',
+          marginBottom:   4,
         }}>
           {currentPlayer.token} {currentPlayer.username}
         </div>
       )}
 
-      {/* Dice display */}
-      {displayDice ? (
+      {/* Drag-and-Release physics cup / Dice display */}
+      {canRoll ? (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+          <div
+            onMouseDown={handleStart}
+            onTouchStart={handleStart}
+            style={{
+              width: 90,
+              height: 110,
+              cursor: 'grab',
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'flex-start',
+              transform: `translateY(${dragY}px) scaleY(${cupScale}) rotate(${cupRotation}deg)`,
+              transition: isDragging ? 'none' : 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+              userSelect: 'none',
+              touchAction: 'none',
+            }}
+          >
+            {/* Cup Lip */}
+            <div style={{
+              width: 76,
+              height: 22,
+              background: '#140802',
+              border: '2px solid #fbbf24',
+              borderRadius: '50%',
+              position: 'absolute',
+              top: 0,
+              zIndex: 2,
+              boxShadow: 'inset 0 4px 8px rgba(0,0,0,0.8)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+            }}>
+              {/* Peeking dice inside cup */}
+              <div style={{ width: 8, height: 8, background: '#ffffff', borderRadius: 2, opacity: dragY > 15 ? 0.3 : 0.8 }} />
+              <div style={{ width: 8, height: 8, background: '#ffffff', borderRadius: 2, opacity: dragY > 15 ? 0.3 : 0.8 }} />
+            </div>
+            
+            {/* Cup Body */}
+            <div style={{
+              width: 76,
+              height: 85,
+              background: 'linear-gradient(135deg, #3d1b04 0%, #d4af37 50%, #210e02 100%)',
+              border: '2px solid rgba(251,191,36,0.7)',
+              borderTop: 'none',
+              borderRadius: '0 0 20px 20px',
+              boxShadow: '0 8px 20px rgba(0,0,0,0.5)',
+              position: 'absolute',
+              top: 10,
+              zIndex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <span style={{ fontSize: 16 }}>🏆</span>
+              <span style={{
+                fontSize: 7, fontWeight: 900, color: '#000000',
+                letterSpacing: '0.05em', textTransform: 'uppercase',
+                background: 'rgba(255,255,255,0.45)', padding: '2px 5px',
+                borderRadius: 3, marginTop: 4
+              }}>
+                {dragY > 35 ? 'Release!' : 'Pull Down'}
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : displayDice ? (
         <div style={{ display: 'flex', gap: 'var(--dice-arena-gap, 12px)', alignItems: 'center' }}>
           <DieFace
             value={displayDice.d1}
@@ -132,35 +260,33 @@ export const DiceArena = React.memo(function DiceArena({
         </div>
       )}
 
-      {/* Roll button */}
+      {/* Roll button fallback */}
       {canRoll && (
         <button
           onClick={onRoll}
           style={{
-            padding:        'var(--die-button-padding, 10px 22px)',
-            borderRadius:   10,
-            background:     'linear-gradient(135deg, #d97706, #f59e0b)',
-            color:          '#0a0805',
-            fontWeight:     900,
-            fontSize:       'var(--die-button-font, 13px)',
-            letterSpacing:  '0.08em',
+            padding:        'var(--die-button-padding, 8px 18px)',
+            borderRadius:   8,
+            background:     'rgba(251,191,36,0.1)',
+            color:          '#fbbf24',
+            fontWeight:     800,
+            fontSize:       'var(--die-button-font, 11px)',
+            letterSpacing:  '0.06em',
             textTransform:  'uppercase',
-            border:         'none',
+            border:         '1px solid rgba(251,191,36,0.35)',
             cursor:         'pointer',
-            boxShadow:      '0 4px 14px rgba(245,158,11,0.5)',
-            transition:     'transform 0.15s, box-shadow 0.15s',
+            transition:     'transform 0.15s, background 0.15s',
             fontFamily:     "'DM Sans', sans-serif",
+            marginTop:      4,
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.transform  = 'scale(1.07)';
-            e.currentTarget.style.boxShadow = '0 6px 24px rgba(245,158,11,0.7)';
+            e.currentTarget.style.background = 'rgba(251,191,36,0.18)';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.transform  = 'scale(1)';
-            e.currentTarget.style.boxShadow = '0 4px 14px rgba(245,158,11,0.5)';
+            e.currentTarget.style.background = 'rgba(251,191,36,0.1)';
           }}
         >
-          🎲 Roll
+          🎲 Roll directly
         </button>
       )}
     </div>

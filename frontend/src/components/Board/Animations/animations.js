@@ -94,7 +94,7 @@ export const BOARD_ANIMATIONS_CSS = `
 
   .token-arrive   { animation: tokenBounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
   .token-active   { animation: tokenGlow 1.8s ease-in-out infinite; }
-  .dice-rolling   { animation: diceRoll 1.2s ease-in-out forwards; }
+  .dice-rolling   { animation: diceRoll3D 1.2s ease-in-out forwards; }
   .dice-landing   { animation: diceLand 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
   .card-flip      { animation: cardFlip 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
   .card-dismiss   { animation: cardDismiss 0.3s ease-in forwards; }
@@ -103,4 +103,59 @@ export const BOARD_ANIMATIONS_CSS = `
   .house-appear   { animation: houseAppear 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
   .monopoly-glow  { animation: monopolyGlow 1.5s ease-in-out infinite; }
   .current-player { animation: currentPlayerPulse 2s ease-in-out infinite; }
+
+  @keyframes diceRoll3D {
+    0%   { transform: rotate3d(1, 1, 0, 0deg) scale(1) translateY(0); }
+    20%  { transform: rotate3d(1, 2, 1, 180deg) scale(1.3) translateY(-25px); }
+    40%  { transform: rotate3d(2, 1, 1, 360deg) scale(1.1) translateY(-10px); }
+    60%  { transform: rotate3d(1, 3, 2, 540deg) scale(1.2) translateY(-20px); }
+    80%  { transform: rotate3d(3, 1, 1, 720deg) scale(1.05) translateY(-5px); }
+    100% { transform: rotate3d(0, 0, 0, 0deg) scale(1) translateY(0) rotate(var(--die-end-rot)); }
+  }
+
+  @keyframes turnFlash {
+    0%   { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  @keyframes turnBanner {
+    0%   { transform: scale(3) rotate(-5deg); opacity: 0; filter: blur(10px); }
+    30%  { transform: scale(1) rotate(0deg); opacity: 1; filter: blur(0); }
+    75%  { transform: scale(1.05); opacity: 1; }
+    100% { transform: scale(0.5) translateY(-100px); opacity: 0; filter: blur(5px); }
+  }
+
+  @keyframes deedFlyToSidebar {
+    0%   { transform: translate(-50%, -50%) scale(0) rotate(-10deg); opacity: 0; left: 50%; top: 50%; }
+    20%  { transform: translate(-50%, -50%) scale(1.1) rotate(5deg); opacity: 1; left: 50%; top: 50%; }
+    35%  { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; left: 50%; top: 50%; }
+    70%  { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; left: 50%; top: 50%; }
+    100% { transform: translate(-50%, -50%) scale(0.2) rotate(15deg); opacity: 0; left: var(--deed-dest-x, 90%); top: var(--deed-dest-y, 80%); }
+  }
+
+  @keyframes coinFly {
+    0%   { transform: translate(0, 0) scale(0); opacity: 0; }
+    10%  { transform: scale(1.2); opacity: 1; }
+    90%  { transform: translate(var(--dx), var(--dy)) scale(1); opacity: 1; }
+    100% { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; }
+  }
+
+  @keyframes rentFloatUp {
+    0%   { transform: translateY(0); opacity: 0; }
+    20%  { opacity: 1; }
+    80%  { opacity: 1; }
+    100% { transform: translateY(-35px); opacity: 0; }
+  }
+
+  @keyframes audienceClap {
+    0%, 100% { transform: scale(1) translateY(0); }
+    50%       { transform: scale(1.06) translateY(-6px); }
+  }
+
+  .animate-clap   { animation: audienceClap 0.6s infinite ease-in-out; }
+  .animate-turnFlash { animation: turnFlash 0.4s ease-out forwards; }
+  .animate-turnBanner { animation: turnBanner 1.8s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
+  .animate-deedFly { animation: deedFlyToSidebar 1.7s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
+  .animate-coinFly { animation: coinFly 0.8s ease-in-out forwards; }
+  .animate-rentFloat { animation: rentFloatUp 1.8s ease-out forwards; }
 `;

@@ -10,6 +10,7 @@ export default function ResultPage() {
   const [gameState, setGameState] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [fireworks, setFireworks] = useState([]);
 
   // Feedback states
   const [rating, setRating] = useState(0);
@@ -180,6 +181,47 @@ export default function ResultPage() {
 
   const winner = sortedRanking[0];
 
+  // Trigger gold fireworks once the results are successfully loaded
+  useEffect(() => {
+    if (!loading && gameState && sortedRanking.length > 0) {
+      const newParticles = [];
+      const burstPoints = [
+        { x: '50vw', y: '50vh' },
+        { x: '15vw', y: '80vh' },
+        { x: '85vw', y: '80vh' },
+        { x: '50vw', y: '25vh' }
+      ];
+      const colors = ['#fbbf24', '#f59e0b', '#d4af37', '#ffe082', '#ffffff'];
+
+      burstPoints.forEach((point, pIdx) => {
+        for (let i = 0; i < 35; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const distance = Math.random() * 250 + 50;
+          const tx = Math.cos(angle) * distance;
+          const ty = Math.sin(angle) * distance;
+          const rot = Math.random() * 720;
+          const size = Math.random() * 10 + 4;
+          const color = colors[Math.floor(Math.random() * colors.length)];
+          const delay = pIdx * 0.45 + Math.random() * 0.15; // staggered bursts
+
+          newParticles.push({
+            id: `p-${pIdx}-${i}`,
+            x: point.x,
+            y: point.y,
+            tx,
+            ty,
+            rot,
+            size,
+            color,
+            delay
+          });
+        }
+      });
+
+      setFireworks(newParticles);
+    }
+  }, [loading, gameState, sortedRanking]);
+
   if (loading) {
     return (
       <div style={{
@@ -250,6 +292,29 @@ export default function ResultPage() {
         pointerEvents: 'none',
       }} />
 
+      {/* Gold Celebration Fireworks */}
+      {fireworks.map(p => (
+        <div
+          key={p.id}
+          style={{
+            position: 'fixed',
+            left: p.x,
+            top: p.y,
+            width: `${p.size}px`,
+            height: `${p.size}px`,
+            background: p.color,
+            borderRadius: '50%',
+            zIndex: 100,
+            pointerEvents: 'none',
+            '--tx': `${p.tx}px`,
+            '--ty': `${p.ty}px`,
+            '--rot': `${p.rot}deg`,
+            animation: 'fireworkBurst 1.8s cubic-bezier(0.1, 0.8, 0.3, 1) forwards',
+            animationDelay: `${p.delay}s`,
+          }}
+        />
+      ))}
+
       <div style={{ width: '100%', maxWidth: 840, position: 'relative', zIndex: 10 }}>
         {/* Title */}
         <div style={{
@@ -264,7 +329,7 @@ export default function ResultPage() {
           🇮🇳 Monopoly India Match Results 🇮🇳
         </div>
 
-        {/* 🏆 WINNER CARD */}
+        {/* 🏆 3D RANKING PEDESTAL & AUDIENCE SHOWCASE */}
         {winner && (
           <div style={{
             position: 'relative',
@@ -272,15 +337,18 @@ export default function ResultPage() {
             border: '2px solid #d4af37',
             boxShadow: '0 25px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(212, 175, 55, 0.15)',
             borderRadius: 24,
-            padding: '40px 30px',
+            padding: '40px 20px',
             textAlign: 'center',
             marginBottom: 48,
             overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
           }}>
             {/* Crown icon with float animation */}
             <div style={{
-              fontSize: 64,
-              marginBottom: 16,
+              fontSize: 48,
+              marginBottom: 20,
               filter: 'drop-shadow(0 0 15px rgba(212,175,55,0.6))',
               animation: 'crownFloat 3s ease-in-out infinite',
             }}>
@@ -293,43 +361,185 @@ export default function ResultPage() {
               color: '#fde68a',
               letterSpacing: '0.15em',
               textTransform: 'uppercase',
-              marginBottom: 6,
+              marginBottom: 24,
             }}>
-              Grand Champion
+              Tournament Results
             </div>
 
-            <h1 style={{
-              fontSize: 36,
-              fontWeight: 900,
-              fontFamily: "'Playfair Display', serif",
-              background: 'linear-gradient(135deg, #fff 30%, #fde68a 70%, #d4af37)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              marginBottom: 10,
-            }}>
-              {winner.username}
-            </h1>
-
-            <p style={{
-              fontSize: 14,
-              color: '#94a3b8',
-              marginBottom: 20,
-            }}>
-              Winner based on Highest Net Worth
-            </p>
-
+            {/* 3D Podium Row */}
             <div style={{
-              display: 'inline-block',
-              padding: '8px 24px',
-              borderRadius: 30,
-              background: 'rgba(212, 175, 55, 0.15)',
-              border: '1.5px solid rgba(212, 175, 55, 0.4)',
-              color: '#fde68a',
-              fontSize: 18,
-              fontWeight: 900,
-              letterSpacing: '0.05em',
+              display: 'flex',
+              alignItems: 'flex-end',
+              justifyContent: 'center',
+              gap: '16px',
+              width: '100%',
+              maxWidth: '500px',
+              marginBottom: '32px',
+              height: '240px',
+              position: 'relative',
             }}>
-              Net Worth: ₹{winner.netWorth.toLocaleString('en-IN')}
+              {/* 2nd Place (Left) */}
+              {sortedRanking[1] && (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  flex: 1,
+                }}>
+                  <span style={{ fontSize: '20px', marginBottom: 4 }}>
+                    {sortedRanking[1].token || '🚗'}
+                  </span>
+                  <span style={{ fontSize: 12, fontWeight: 'bold', color: '#cbd5e1', maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {sortedRanking[1].username}
+                  </span>
+                  <span style={{ fontSize: 10, color: '#94a3b8', marginBottom: 8, fontWeight: 700 }}>
+                    ₹{sortedRanking[1].netWorth.toLocaleString('en-IN')}
+                  </span>
+                  
+                  {/* Podium block */}
+                  <div style={{
+                    width: '90px',
+                    height: '90px',
+                    background: 'linear-gradient(180deg, #cbd5e1 0%, #475569 100%)',
+                    border: '1.5px solid rgba(255, 255, 255, 0.6)',
+                    borderBottom: 'none',
+                    borderRadius: '10px 10px 0 0',
+                    boxShadow: '0 10px 20px rgba(0,0,0,0.3)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transform: 'perspective(400px) rotateX(10deg)',
+                  }}>
+                    <span style={{ fontSize: 24, fontWeight: 900, color: '#94a3b8', textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>2</span>
+                  </div>
+                </div>
+              )}
+
+              {/* 1st Place (Center) */}
+              {sortedRanking[0] && (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  flex: 1.2,
+                  transform: 'translateY(-10px)',
+                }}>
+                  <span style={{ fontSize: '28px', marginBottom: 4, display: 'inline-block', animation: 'crownFloat 1.5s ease-in-out infinite' }}>
+                    {sortedRanking[0].token || '🎩'}
+                  </span>
+                  <span style={{ fontSize: 14, fontWeight: 'black', color: '#fbbf24', textShadow: '0 0 10px rgba(251,191,36,0.3)', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {sortedRanking[0].username}
+                  </span>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: '#fde68a', marginBottom: 8 }}>
+                    ₹{sortedRanking[0].netWorth.toLocaleString('en-IN')}
+                  </span>
+                  
+                  {/* Podium block */}
+                  <div style={{
+                    width: '110px',
+                    height: '130px',
+                    background: 'linear-gradient(180deg, #fbbf24 0%, #b45309 100%)',
+                    border: '2px solid #fff',
+                    borderBottom: 'none',
+                    borderRadius: '12px 12px 0 0',
+                    boxShadow: '0 15px 30px rgba(245, 158, 11, 0.35)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transform: 'perspective(400px) rotateX(10deg)',
+                    position: 'relative',
+                  }}>
+                    <span style={{ fontSize: 36, fontWeight: 900, color: '#fff', textShadow: '0 2px 6px rgba(0,0,0,0.4)' }}>1</span>
+                  </div>
+                </div>
+              )}
+
+              {/* 3rd Place (Right) */}
+              {sortedRanking[2] && (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  flex: 0.9,
+                }}>
+                  <span style={{ fontSize: '20px', marginBottom: 4 }}>
+                    {sortedRanking[2].token || '🚂'}
+                  </span>
+                  <span style={{ fontSize: 12, fontWeight: 'bold', color: '#eab308', maxWidth: '90px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {sortedRanking[2].username}
+                  </span>
+                  <span style={{ fontSize: 10, color: '#94a3b8', marginBottom: 8, fontWeight: 700 }}>
+                    ₹{sortedRanking[2].netWorth.toLocaleString('en-IN')}
+                  </span>
+                  
+                  {/* Podium block */}
+                  <div style={{
+                    width: '80px',
+                    height: '70px',
+                    background: 'linear-gradient(180deg, #b45309 0%, #78350f 100%)',
+                    border: '1.5px solid rgba(251, 191, 36, 0.4)',
+                    borderBottom: 'none',
+                    borderRadius: '8px 8px 0 0',
+                    boxShadow: '0 8px 15px rgba(0,0,0,0.3)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transform: 'perspective(400px) rotateX(10deg)',
+                  }}>
+                    <span style={{ fontSize: 20, fontWeight: 900, color: '#b45309', textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>3</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Clapping Audience block */}
+            <div style={{
+              width: '100%',
+              background: 'rgba(0,0,0,0.25)',
+              border: '1px solid rgba(255,255,255,0.05)',
+              borderRadius: '16px',
+              padding: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '10px',
+            }}>
+              <span style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.05em' }}>
+                👏 Clapping Audience 👏
+              </span>
+              <div style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                justifyContent: 'center',
+                gap: '12px',
+              }}>
+                {sortedRanking.slice(1).map((p, idx) => (
+                  <div
+                    key={p.playerId}
+                    className="animate-clap"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      background: 'rgba(255,255,255,0.04)',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      padding: '4px 10px',
+                      borderRadius: '20px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      color: '#d1d5db',
+                      animationDelay: `${idx * 0.15}s`,
+                    }}
+                  >
+                    <span>👏</span>
+                    <span>{p.username}</span>
+                    <span style={{ opacity: 0.6 }}>{p.token || '🎲'}</span>
+                  </div>
+                ))}
+                {sortedRanking.length <= 1 && (
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>No other landlords to clap!</span>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -722,6 +932,18 @@ export default function ResultPage() {
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
+        }
+        @keyframes fireworkBurst {
+          0% { transform: translate3d(0, 0, 0) scale(1); opacity: 1; }
+          100% { transform: translate3d(var(--tx), var(--ty), 0) scale(0.3) rotate(var(--rot)); opacity: 0; }
+        }
+        @keyframes audienceClap {
+          0%, 100% { transform: scale(1) translateY(0); }
+          50%       { transform: scale(1.06) translateY(-6px); }
+        }
+        .animate-clap {
+          animation: audienceClap 0.6s infinite ease-in-out;
+          display: inline-flex;
         }
       `}</style>
       <CreatorFooter />

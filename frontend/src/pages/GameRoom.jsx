@@ -101,6 +101,7 @@ function PlayerCard({ player, index, isCurrentTurn, isMe, isViewerSpectator = fa
   const showMoney = isMe || isViewerSpectator;
   return (
     <div
+      id={`player-card-${player.id}`}
       className="flex items-start gap-2 px-2.5 py-2.5 rounded-xl transition-all duration-300"
       style={{
         background: isCurrentTurn ? 'rgba(34,197,94,0.08)' : isMe ? 'rgba(245,158,11,0.05)' : 'rgba(255,255,255,0.02)',
@@ -335,6 +336,14 @@ export default function GameRoom() {
   const [showRuleBook, setShowRuleBook] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [activeTab,     setActiveTab]     = useState('none'); // 'none' | 'lobby' | 'chat' | 'properties'
+  
+  // Juiciness and visual animation states
+  const [showTurnSplash, setShowTurnSplash] = useState(false);
+  const [confetti, setConfetti] = useState([]);
+  const [flyingCoins, setFlyingCoins] = useState([]);
+  const [flyingDeed, setFlyingDeed] = useState(null);
+  const [rentFloaters, setRentFloaters] = useState([]);
+  const prevIsMyTurnRef = useRef(false);
 
   // Auto trigger onboarding tutorial on first-time entry
   useEffect(() => {
@@ -719,6 +728,9 @@ export default function GameRoom() {
           const { amount, fromId, toId, partial } = event.payload;
           boardAnimation.setRentInfo({ amount, fromId, toId, partial: partial ?? false });
 
+          // Trigger visual coin flying and rent floater effects
+          triggerRentPaidEffects(fromId, toId, amount);
+
           // Block the sequencer until the rent is paid/acknowledged
           await new Promise((resolve) => {
             rentDismissResolverRef.current = resolve;
@@ -768,6 +780,10 @@ export default function GameRoom() {
           boardAnimation.flashProperty(tileId);
           boardAnimation.setPendingPurchase(null);
           boardAnimation.showToast({ type: 'buy', amount: price, tileId });
+          
+          // Trigger visual confetti and flying deed card effects
+          triggerBoughtEffects(tileId);
+
           await delay(1000);
           break;
         }
@@ -1124,6 +1140,86 @@ export default function GameRoom() {
   const canEnd          = isMyTurn && hasRolled;
   const canPayJail      = isMyTurn && (me?.inJail ?? false);
 
+  // Turn Splash Trigger Effect
+  useEffect(() => {
+    if (isMyTurn && !prevIsMyTurnRef.current) {
+      setShowTurnSplash(true);
+      const timer = setTimeout(() => setShowTurnSplash(false), 2000);
+      return () => clearTimeout(timer);
+    }
+    prevIsMyTurnRef.current = isMyTurn;
+  }, [isMyTurn]);
+
+  // Helper: Get player card center for flying elements
+  const getCardCenter = useCallback((playerId) => {
+    const isMobile = window.innerWidth < 1024;
+    let el = document.getElementById(isMobile ? `player-card-mobile-${playerId}` : `player-card-${playerId}`);
+    if (!el) {
+      el = document.getElementById(`player-card-${playerId}`) || document.getElementById(`player-card-mobile-${playerId}`);
+    }
+    if (el) {
+      const rect = el.getBoundingClientRect();
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    }
+    return { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+  }, []);
+
+  // Helper: Trigger property bought confetti and flying deed card
+  const triggerBoughtEffects = useCallback((tileId) => {
+    // Spawn confetti from center
+    const newConfetti = [];
+    const colors = ['#f59e0b', '#10b981', '#3b82f6', '#ec4899', '#8b5cf6', '#f43f5e', '#fbbf24', '#34d399'];
+    for (let i = 0; i < 40; i++) {
+      const cx = (Math.random() - 0.5) * 450;
+      const cy = -Math.random() * 300 - 50;
+      const crot = (Math.random() - 0.5) * 720;
+      const size = Math.random() * 8 + 6;
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      const delay = Math.random() * 0.4;
+      newConfetti.push({ id: Date.now() + i, cx, cy, crot, size, color, delay });
+    }
+    setConfetti(newConfetti);
+    setTimeout(() => setConfetti([]), 2500);
+
+    // Spawn flying deed card
+    setFlyingDeed({ tileId });
+    setTimeout(() => setFlyingDeed(null), 2000);
+  }, []);
+
+  // Helper: Trigger rent flying coins and green floating label
+  const triggerRentPaidEffects = useCallback((fromId, toId, amount) => {
+    const start = getCardCenter(fromId);
+    const end = getCardCenter(toId);
+
+    // Spawn flying gold coins
+    const coins = [];
+    for (let i = 0; i < 12; i++) {
+      const delay = i * 0.08;
+      coins.push({
+        id: Date.now() + i,
+        startX: start.x,
+        startY: start.y,
+        dx: end.x - start.x,
+        dy: end.y - start.y,
+        delay,
+      });
+    }
+    setFlyingCoins(coins);
+    setTimeout(() => setFlyingCoins([]), 2000);
+
+    // Spawn rent floating label at receiver's card position
+    const floater = {
+      id: Date.now(),
+      x: end.x,
+      y: end.y - 25,
+      amount,
+    };
+    setRentFloaters(prev => [...prev, floater]);
+    setTimeout(() => {
+      setRentFloaters(prev => prev.filter(f => f.id !== floater.id));
+    }, 2200);
+  }, [getCardCenter]);
+
   const myProperties = Object.entries(gameState?.properties ?? {})
     .filter(([_, prop]) => prop.ownerId === myId)
     .map(([id, prop]) => {
@@ -1181,6 +1277,11 @@ export default function GameRoom() {
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,700&family=DM+Sans:wght@400;500;600;700;800;900&display=swap');
         ::-webkit-scrollbar { width: 3px }
         ::-webkit-scrollbar-thumb { background: rgba(212,175,55,0.18); border-radius: 4px }
+
+        @keyframes confettiFall {
+          0% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); opacity: 1; }
+          100% { transform: translate3d(var(--cx), var(--cy), 0) rotate(var(--crot)) scale(0.4); opacity: 0; }
+        }
         
         :root {
           --board-height: min(100vw - 16px, 52vh);
@@ -1281,6 +1382,141 @@ export default function GameRoom() {
           }
         }
       `}</style>
+
+      {/* Turn Splash Overlays */}
+      {showTurnSplash && (
+        <>
+          <div className="animate-turnFlash" style={{
+            position: 'fixed',
+            inset: 0,
+            background: '#ffffff',
+            zIndex: 199,
+            pointerEvents: 'none',
+          }} />
+          <div className="flex items-center justify-center pointer-events-none" style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 200,
+          }}>
+            <h1 className="animate-turnBanner text-4xl md:text-7xl font-black italic tracking-widest text-center" style={{
+              fontFamily: "'Playfair Display', serif",
+              background: 'linear-gradient(135deg, #ffe082 0%, #fbbf24 50%, #b45309 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              filter: 'drop-shadow(0 15px 30px rgba(0,0,0,0.8))',
+            }}>
+              YOUR TURN
+            </h1>
+          </div>
+        </>
+      )}
+
+      {/* Confetti Container */}
+      {confetti.map(c => (
+        <div
+          key={c.id}
+          style={{
+            position: 'fixed',
+            left: '50%',
+            top: '45%',
+            width: `${c.size}px`,
+            height: `${c.size * 1.5}px`,
+            background: c.color,
+            borderRadius: '2px',
+            zIndex: 180,
+            pointerEvents: 'none',
+            '--cx': `${c.cx}px`,
+            '--cy': `${c.cy}px`,
+            '--crot': `${c.crot}deg`,
+            animation: `confettiFall 1.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards`,
+            animationDelay: `${c.delay}s`,
+            transformOrigin: 'center',
+          }}
+        />
+      ))}
+
+      {/* Flying Deed Container */}
+      {flyingDeed && (
+        <div
+          className="animate-deedFly"
+          style={{
+            position: 'fixed',
+            width: '130px',
+            height: '170px',
+            background: '#140c06',
+            border: '3px solid #fbbf24',
+            borderRadius: '14px',
+            boxShadow: '0 25px 60px rgba(0,0,0,0.9), inset 0 0 15px rgba(251,191,36,0.1)',
+            zIndex: 150,
+            pointerEvents: 'none',
+            display: 'flex',
+            flexDirection: 'column',
+            padding: '10px',
+            '--deed-dest-x': window.innerWidth < 1024 ? '80vw' : '90vw',
+            '--deed-dest-y': window.innerWidth < 1024 ? '95vh' : '75vh',
+          }}
+        >
+          <div style={{
+            height: '28px',
+            background: TILE_BY_ID[flyingDeed.tileId]?.group ? COLOR_GROUP_META[TILE_BY_ID[flyingDeed.tileId].group]?.hex : '#4b5563',
+            borderRadius: '6px',
+            marginBottom: '8px',
+          }} />
+          <span style={{ fontSize: '13px', fontWeight: 900, color: '#fff', textAlign: 'center', fontFamily: "'DM Sans', sans-serif" }}>
+            {TILE_BY_ID[flyingDeed.tileId]?.name}
+          </span>
+          <span style={{ fontSize: '11px', color: '#fbbf24', fontWeight: 800, textAlign: 'center', marginTop: 'auto', fontFamily: "'DM Sans', sans-serif" }}>
+            ₹{TILE_BY_ID[flyingDeed.tileId]?.price}
+          </span>
+        </div>
+      )}
+
+      {/* Flying Coins Container */}
+      {flyingCoins.map(coin => (
+        <div
+          key={coin.id}
+          className="animate-coinFly"
+          style={{
+            position: 'fixed',
+            left: `${coin.startX}px`,
+            top: `${coin.startY}px`,
+            width: '16px',
+            height: '16px',
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, #ffe082 0%, #f59e0b 60%, #b45309 100%)',
+            border: '1px solid #fbbf24',
+            boxShadow: '0 4px 10px rgba(245,158,11,0.5)',
+            zIndex: 180,
+            pointerEvents: 'none',
+            '--dx': `${coin.dx}px`,
+            '--dy': `${coin.dy}px`,
+            animationDelay: `${coin.delay}s`,
+          }}
+        />
+      ))}
+
+      {/* Rent Floaters Container */}
+      {rentFloaters.map(f => (
+        <div
+          key={f.id}
+          className="animate-rentFloat"
+          style={{
+            position: 'fixed',
+            left: `${f.x}px`,
+            top: `${f.y}px`,
+            transform: 'translateX(-50%)',
+            zIndex: 185,
+            pointerEvents: 'none',
+            fontSize: '14px',
+            fontWeight: 900,
+            color: '#22c55e',
+            textShadow: '0 0 10px rgba(34,197,94,0.8), 0 2px 4px rgba(0,0,0,0.8)',
+            fontFamily: "'DM Sans', sans-serif",
+          }}
+        >
+          +₹{Number(f.amount).toLocaleString('en-IN')}
+        </div>
+      ))}
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={dismissToast} />}
 
@@ -1459,6 +1695,7 @@ export default function GameRoom() {
           return (
             <div
               key={p.id}
+              id={`player-card-mobile-${p.id}`}
               onClick={() => setShowPlayersModal(true)}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold flex-shrink-0 transition-all border cursor-pointer active:scale-95 hover:border-yellow-500/50"
               style={{
