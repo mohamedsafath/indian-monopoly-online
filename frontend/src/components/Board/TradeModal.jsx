@@ -134,13 +134,24 @@ export function TradeModal({
   const isTradeTarget    = activeTrade?.toPlayerId === myId;
   const isTradeInitiator = activeTrade?.fromPlayerId === myId;
 
+  const handleClose = async () => {
+    if (activeTrade && isTradeTarget) {
+      try {
+        await onRejectTrade();
+      } catch (err) {
+        console.error('Failed to auto-reject trade on close:', err);
+      }
+    }
+    onClose();
+  };
+
   const accent = '#3b82f6';
 
   return (
     <div
       onClick={(e) => {
         if (e.target === e.currentTarget) {
-          onClose();
+          handleClose();
         }
       }}
       style={{
@@ -179,7 +190,7 @@ export function TradeModal({
               </div>
             )}
           </div>
-          <button onClick={onClose} style={{
+          <button onClick={handleClose} style={{
             background: 'none', border: 'none', color: 'rgba(156,163,175,0.5)',
             cursor: 'pointer', fontSize: 18,
           }}>×</button>
