@@ -493,7 +493,12 @@ export default function GameRoom() {
           sessionStorage.setItem('mi_isSpectator', data.isSpectator ? 'true' : 'false');
           if (data.room) setRoom(data.room);
           if (data.gameState) setGameState(data.gameState);
-        } catch {
+        } catch (err) {
+          const isExplicitRejection = err.message?.includes('not found') || err.message?.includes('ended');
+          if (!isExplicitRejection) {
+            throw err;
+          }
+
           // Player is not in the room yet (copied link join / fresh tab session during play)
           // Since the game is already in progress, join them automatically as a spectator
           const storedUserStr = localStorage.getItem('mi_google_user');
@@ -941,19 +946,34 @@ export default function GameRoom() {
 
     const onConnect = () => {
       console.log('[GameRoom] Socket connected/reconnected, restoring match state...');
-      socketService.reconnectRoom(roomCode, myId)
-        .then((data) => {
-          sessionStorage.setItem('mi_isSpectator', data.isSpectator ? 'true' : 'false');
-          if (data.room) setRoom(data.room);
-          if (data.gameState) {
-            setGameState(data.gameState);
-            showToast('Connection restored successfully!', 'success');
-          }
-        })
-        .catch((err) => {
-          console.error('[GameRoom] Reconnection failed:', err.message);
-          showToast('Attempting to reconnect...', 'warning');
-        });
+      let attempts = 0;
+      const attemptReconnect = () => {
+        if (!socket.connected) return;
+        socketService.reconnectRoom(roomCode, myId)
+          .then((data) => {
+            sessionStorage.setItem('mi_isSpectator', data.isSpectator ? 'true' : 'false');
+            if (data.room) setRoom(data.room);
+            if (data.gameState) {
+              setGameState(data.gameState);
+              showToast('Connection restored successfully!', 'success');
+            }
+          })
+          .catch((err) => {
+            console.error(`[GameRoom] Reconnection attempt #${attempts} failed:`, err.message);
+            const isExplicitRejection = err.message?.includes('not found') || err.message?.includes('ended');
+            if (isExplicitRejection) {
+              showToast(err.message, 'error');
+              return;
+            }
+            attempts++;
+            if (attempts < 5 && socket.connected) {
+              setTimeout(attemptReconnect, 2000);
+            } else {
+              showToast('Reconnection failed. Please check your network or refresh the page.', 'error');
+            }
+          });
+      };
+      attemptReconnect();
     };
 
     socket.on('connect',            onConnect);

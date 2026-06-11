@@ -1028,7 +1028,19 @@ const triggerBotCycle = (io, room) => {
  * Returns { ok: boolean, room?: RoomObject }
  */
 const guardInRoom = (socket) => {
-  const code = socketToRoom.get(socket.id);
+  let code = socketToRoom.get(socket.id);
+  if (!code) {
+    // FALLBACK: Search all active rooms for a player or spectator with this socket.id
+    for (const [roomCode, room] of rooms.entries()) {
+      const p = findPlayerBySocket(room, socket.id);
+      if (p) {
+        code = roomCode;
+        socketToRoom.set(socket.id, roomCode); // heal the mapping
+        console.log(`[guardInRoom] Healed missing socketToRoom mapping for socket ${socket.id} in room ${roomCode}`);
+        break;
+      }
+    }
+  }
   if (!code) return { ok: false, error: 'You are not in a room' };
   const room = rooms.get(code);
   if (!room) return { ok: false, error: 'Room not found' };

@@ -351,7 +351,12 @@ export default function Lobby() {
           sessionStorage.setItem('mi_isSpectator', data.isSpectator ? 'true' : 'false');
           const me = data.room.players.find((p) => p.id === myId);
           if (me) setMyReady(me.ready);
-        } catch {
+        } catch (err) {
+          const isExplicitRejection = err.message?.includes('not found') || err.message?.includes('ended');
+          if (!isExplicitRejection) {
+            throw err;
+          }
+
           // Player is not in the room yet (copied link join / fresh tab session)
           const storedUserStr = localStorage.getItem('mi_google_user');
           const storedUser = storedUserStr ? JSON.parse(storedUserStr) : null;
@@ -451,16 +456,27 @@ export default function Lobby() {
     };
     const onConnect = () => {
       console.log('[Lobby] Socket connected/reconnected, restoring lobby state...');
-      socketService.reconnectRoom(roomCode, myId)
-        .then((data) => {
-          setRoom(data.room ?? data);
-          sessionStorage.setItem('mi_isSpectator', data.isSpectator ? 'true' : 'false');
-          const me = data.room?.players?.find((p) => p.id === myId);
-          if (me) setMyReady(me.ready);
-        })
-        .catch((err) => {
-          console.error('[Lobby] Reconnection failed:', err.message);
-        });
+      let attempts = 0;
+      const attemptReconnect = () => {
+        if (!socket.connected) return;
+        socketService.reconnectRoom(roomCode, myId)
+          .then((data) => {
+            setRoom(data.room ?? data);
+            sessionStorage.setItem('mi_isSpectator', data.isSpectator ? 'true' : 'false');
+            const me = data.room?.players?.find((p) => p.id === myId);
+            if (me) setMyReady(me.ready);
+          })
+          .catch((err) => {
+            console.error(`[Lobby] Reconnection attempt #${attempts} failed:`, err.message);
+            const isExplicitRejection = err.message?.includes('not found') || err.message?.includes('ended');
+            if (isExplicitRejection) return;
+            attempts++;
+            if (attempts < 5 && socket.connected) {
+              setTimeout(attemptReconnect, 2000);
+            }
+          });
+      };
+      attemptReconnect();
     };
 
     socket.on('connect',            onConnect);
