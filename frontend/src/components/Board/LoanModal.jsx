@@ -77,7 +77,11 @@ export function LoanModal({
         backdropFilter: 'blur(12px)',
         animation:      leaving ? 'loanModalOut 0.3s ease-in forwards' : 'loanModalIn 0.35s cubic-bezier(0.34,1.2,0.64,1) forwards',
       }}
-      onClick={handleClose}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          handleClose();
+        }
+      }}
     >
       <div
         onClick={(e) => e.stopPropagation()}

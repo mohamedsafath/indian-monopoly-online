@@ -88,7 +88,11 @@ export function PropertyPurchaseModal({
         backdropFilter: 'blur(10px)',
         animation:      leaving ? 'propModalOut 0.3s ease-in forwards' : 'propModalIn 0.35s cubic-bezier(0.34,1.2,0.64,1) forwards',
       }}
-      onClick={() => close(onClose)}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          close(onClose);
+        }
+      }}
     >
       <div
         onClick={(e) => e.stopPropagation()}

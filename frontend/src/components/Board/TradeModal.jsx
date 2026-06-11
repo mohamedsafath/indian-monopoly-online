@@ -138,7 +138,11 @@ export function TradeModal({
 
   return (
     <div
-      onClick={onClose}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
       style={{
         position:       'fixed', inset: 0, zIndex: 1500,
         display:        'flex', alignItems: 'center', justifyContent: 'center',

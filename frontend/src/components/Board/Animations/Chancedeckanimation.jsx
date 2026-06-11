@@ -138,7 +138,11 @@ export function CardPopup({ card, onDismiss }) {
 
   return (
     <div
-      onClick={dismiss}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          dismiss();
+        }
+      }}
       className="mobile-card-popup-container"
       style={{
         position:       'fixed',
