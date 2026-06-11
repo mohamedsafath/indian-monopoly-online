@@ -113,16 +113,25 @@ export const BOARD_ANIMATIONS_CSS = `
     100% { transform: rotate3d(0, 0, 0, 0deg) scale(1) translateY(0) rotate(var(--die-end-rot)); }
   }
 
-  @keyframes turnFlash {
-    0%   { opacity: 1; }
-    100% { opacity: 0; }
+  @keyframes turnOverlayFade {
+    0%   { opacity: 0; backdrop-filter: blur(0px); background: rgba(8, 6, 4, 0); }
+    12%  { opacity: 1; backdrop-filter: blur(8px); background: rgba(8, 6, 4, 0.45); }
+    88%  { opacity: 1; backdrop-filter: blur(8px); background: rgba(8, 6, 4, 0.45); }
+    100% { opacity: 0; backdrop-filter: blur(0px); background: rgba(8, 6, 4, 0); }
   }
 
-  @keyframes turnBanner {
-    0%   { transform: scale(3) rotate(-5deg); opacity: 0; filter: blur(10px); }
-    30%  { transform: scale(1) rotate(0deg); opacity: 1; filter: blur(0); }
-    75%  { transform: scale(1.05); opacity: 1; }
-    100% { transform: scale(0.5) translateY(-100px); opacity: 0; filter: blur(5px); }
+  @keyframes turnTextReveal {
+    0%   { transform: scale(0.9) translateY(15px); opacity: 0; filter: blur(6px); letter-spacing: 0.1em; }
+    15%  { transform: scale(1) translateY(0); opacity: 1; filter: blur(0); letter-spacing: 0.2em; }
+    85%  { transform: scale(1.02) translateY(0); opacity: 1; filter: blur(0); letter-spacing: 0.24em; }
+    100% { transform: scale(1.04) translateY(-15px); opacity: 0; filter: blur(6px); letter-spacing: 0.28em; }
+  }
+
+  @keyframes turnLineExpand {
+    0%   { width: 0%; opacity: 0; }
+    18%  { width: 85%; opacity: 1; }
+    82%  { width: 100%; opacity: 1; }
+    100% { width: 0%; opacity: 0; }
   }
 
   @keyframes deedFlyToSidebar {
@@ -153,8 +162,9 @@ export const BOARD_ANIMATIONS_CSS = `
   }
 
   .animate-clap   { animation: audienceClap 0.6s infinite ease-in-out; }
-  .animate-turnFlash { animation: turnFlash 0.4s ease-out forwards; }
-  .animate-turnBanner { animation: turnBanner 1.8s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
+  .animate-turnOverlay { animation: turnOverlayFade 2.0s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
+  .animate-turnText    { animation: turnTextReveal 2.0s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
+  .animate-turnLine    { animation: turnLineExpand 2.0s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
   .animate-deedFly { animation: deedFlyToSidebar 1.7s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
   .animate-coinFly { animation: coinFly 0.8s ease-in-out forwards; }
   .animate-rentFloat { animation: rentFloatUp 1.8s ease-out forwards; }

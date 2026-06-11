@@ -1385,30 +1385,71 @@ export default function GameRoom() {
 
       {/* Turn Splash Overlays */}
       {showTurnSplash && (
-        <>
-          <div className="animate-turnFlash" style={{
-            position: 'fixed',
-            inset: 0,
-            background: '#ffffff',
-            zIndex: 199,
-            pointerEvents: 'none',
+        <div className="animate-turnOverlay" style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 1999,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          pointerEvents: 'none',
+        }}>
+          {/* Top Gold Accent Line */}
+          <div className="animate-turnLine" style={{
+            height: '1px',
+            background: 'linear-gradient(90deg, transparent, #ffe082 30%, #fbbf24 50%, #ffe082 70%, transparent)',
+            boxShadow: '0 0 8px rgba(251, 191, 36, 0.5)',
+            marginBottom: '24px',
           }} />
-          <div className="flex items-center justify-center pointer-events-none" style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 200,
+
+          {/* Text Container */}
+          <div className="animate-turnText" style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            textAlign: 'center',
           }}>
-            <h1 className="animate-turnBanner text-4xl md:text-7xl font-black italic tracking-widest text-center" style={{
+            {/* Sub-label */}
+            <span style={{
+              fontSize: '12px',
+              fontWeight: '700',
+              textTransform: 'uppercase',
+              letterSpacing: '0.4em',
+              color: '#fbbf24',
+              opacity: 0.9,
+              marginBottom: '8px',
+              fontFamily: "'DM Sans', sans-serif",
+            }}>
+              Your Move
+            </span>
+
+            {/* Main title */}
+            <h1 style={{
               fontFamily: "'Playfair Display', serif",
-              background: 'linear-gradient(135deg, #ffe082 0%, #fbbf24 50%, #b45309 100%)',
+              fontSize: '44px',
+              lineHeight: '1.2',
+              fontWeight: '800',
+              fontStyle: 'italic',
+              background: 'linear-gradient(135deg, #ffffff 0%, #ffe082 50%, #fbbf24 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
-              filter: 'drop-shadow(0 15px 30px rgba(0,0,0,0.8))',
+              filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.6))',
+              margin: '0 0 8px 0',
             }}>
-              YOUR TURN
+              It's Your Turn
             </h1>
           </div>
-        </>
+
+          {/* Bottom Gold Accent Line */}
+          <div className="animate-turnLine" style={{
+            height: '1px',
+            background: 'linear-gradient(90deg, transparent, #ffe082 30%, #fbbf24 50%, #ffe082 70%, transparent)',
+            boxShadow: '0 0 8px rgba(251, 191, 36, 0.5)',
+            marginTop: '24px',
+          }} />
+        </div>
       )}
 
       {/* Confetti Container */}

@@ -196,6 +196,12 @@ export function TradeModal({
           }}>×</button>
         </div>
 
+        {error && (
+          <div style={{ padding: '12px 20px 0', fontSize: 11, color: '#f87171', textAlign: 'center', fontWeight: 600 }}>
+            {error}
+          </div>
+        )}
+
         {/* ── Active trade review (target player) ── */}
         {activeTrade && isTradeTarget && (
           <div style={{ padding: '16px 20px' }}>
@@ -203,8 +209,26 @@ export function TradeModal({
               trade={activeTrade}
               players={players}
               properties={properties}
-              onAccept={async () => { await onAcceptTrade(); onClose(); }}
-              onReject={async () => { await onRejectTrade(); onClose(); }}
+              onAccept={async () => {
+                try {
+                  setError('');
+                  await onAcceptTrade();
+                  onClose();
+                } catch (err) {
+                  setError(err.message || 'Failed to accept trade');
+                  onClose();
+                }
+              }}
+              onReject={async () => {
+                try {
+                  setError('');
+                  await onRejectTrade();
+                  onClose();
+                } catch (err) {
+                  setError(err.message || 'Failed to reject trade');
+                  onClose();
+                }
+              }}
             />
           </div>
         )}
@@ -216,7 +240,16 @@ export function TradeModal({
               Waiting for {players[activeTrade.toPlayerId]?.username} to respond…
             </div>
             <button
-              onClick={async () => { await onCancelTrade(); onClose(); }}
+              onClick={async () => {
+                try {
+                  setError('');
+                  await onCancelTrade();
+                  onClose();
+                } catch (err) {
+                  setError(err.message || 'Failed to cancel trade');
+                  onClose();
+                }
+              }}
               style={{
                 padding: '8px 20px', borderRadius: 8,
                 background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)',
@@ -368,11 +401,7 @@ export function TradeModal({
               </div>
             </div>
 
-            {error && (
-              <div style={{ fontSize: 11, color: '#f87171', textAlign: 'center', fontWeight: 600 }}>
-                {error}
-              </div>
-            )}
+            {/* Error was moved below header so it is visible in all states */}
 
             <button
               onClick={handlePropose}
