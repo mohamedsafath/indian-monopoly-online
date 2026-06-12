@@ -216,3 +216,4 @@ console.log("✅ Test 3 Passed: Bot rejected unequal trade cleanly!");
 console.log("\n==================================================");
 console.log("🎉 ALL BOT TRADE INTEGRATION TESTS PASSED SUCCESSFULLY! 🎉");
 console.log("==================================================");
+process.exit(0);

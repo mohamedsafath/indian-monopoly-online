@@ -423,7 +423,7 @@ const rollDice = (gameState, playerId) => {
         `${player.username} rolled 3 consecutive doubles — sent to Tihar Jail! 🚔`,
       ));
       // End turn immediately (jail ends the streak)
-      _finaliseRoll(gameState, player, isDouble, jailed = true, events);
+      _finaliseRoll(gameState, player, isDouble, true, events);
       return ok(events);
     }
   } else {

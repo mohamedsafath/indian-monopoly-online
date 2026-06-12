@@ -1905,19 +1905,28 @@ const mountGameSocket = (io) => {
     });
 
     // ── add-bot ───────────────────────────────────────────────────────────────
-    socket.on('add-bot', (payload = {}, ack) => {
+    socket.on('add-bot', (payload, ack) => {
+      let actualPayload = {};
+      let actualAck = ack;
+
+      if (typeof payload === 'function') {
+        actualAck = payload;
+      } else if (payload && typeof payload === 'object') {
+        actualPayload = payload;
+      }
+
       const gr = guardInRoom(socket);
-      if (!gr.ok) return ackError(ack, gr.error);
+      if (!gr.ok) return ackError(actualAck, gr.error);
       const { room } = gr;
 
-      if (room.status !== 'lobby') return ackError(ack, 'Game already started');
+      if (room.status !== 'lobby') return ackError(actualAck, 'Game already started');
       const player = findPlayerBySocket(room, socket.id);
-      if (!player || room.hostId !== player.id) return ackError(ack, 'Only the host can add bots');
-      if (room.players.length >= MAX_PLAYERS) return ackError(ack, 'Room is full');
+      if (!player || room.hostId !== player.id) return ackError(actualAck, 'Only the host can add bots');
+      if (room.players.length >= MAX_PLAYERS) return ackError(actualAck, 'Room is full');
 
       let difficulty = 'medium';
-      if (payload && typeof payload === 'object' && ['easy', 'medium', 'hard'].includes(payload.difficulty)) {
-        difficulty = payload.difficulty;
+      if (actualPayload && ['easy', 'medium', 'hard'].includes(actualPayload.difficulty)) {
+        difficulty = actualPayload.difficulty;
       }
 
       const botNames = ['Birbal', 'Tenali', 'Chanakya', 'Aryabhata', 'Shakuntala', 'Vikram', 'Kalidasa'];
@@ -1944,7 +1953,7 @@ const mountGameSocket = (io) => {
       room.players.push(botPlayer);
       saveRoom(room);
       emitRoomUpdated(io, room);
-      ackOk(ack, { player: botPlayer });
+      ackOk(actualAck, { player: botPlayer });
     });
 
     // ── remove-bot ────────────────────────────────────────────────────────────
