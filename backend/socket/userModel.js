@@ -27,6 +27,7 @@ const UserSchema = new mongoose.Schema({
   rentPaid: { type: Number, default: 0 },
   rentEarned: { type: Number, default: 0 },
   bankruptcies: { type: Number, default: 0 },
+  hotelsBuilt: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -141,7 +142,8 @@ const registerUser = async (username, email) => {
     auctionsWon: 0,
     rentPaid: 0,
     rentEarned: 0,
-    bankruptcies: 0
+    bankruptcies: 0,
+    hotelsBuilt: 0
   };
 
   const dbActive = getIsDbActive();
@@ -179,7 +181,8 @@ const updateUserStats = async (
   auctionsWon,
   rentPaid,
   rentEarned,
-  bankruptcies
+  bankruptcies,
+  hotelsBuilt
 ) => {
   const parsedWins = parseInt(wins) || 0;
   const parsedGames = parseInt(games) || 0;
@@ -193,6 +196,7 @@ const updateUserStats = async (
   const parsedRentPaid = parseInt(rentPaid) || 0;
   const parsedRentEarned = parseInt(rentEarned) || 0;
   const parsedBankruptcies = parseInt(bankruptcies) || 0;
+  const parsedHotelsBuilt = parseInt(hotelsBuilt) || 0;
 
   const calculatedLevel = Math.floor(parsedWins * 0.3) + 1;
 
@@ -214,6 +218,7 @@ const updateUserStats = async (
           rentPaid: parsedRentPaid,
           rentEarned: parsedRentEarned,
           bankruptcies: parsedBankruptcies,
+          hotelsBuilt: parsedHotelsBuilt,
           level: calculatedLevel
         },
         { new: true }
@@ -244,6 +249,7 @@ const updateUserStats = async (
         rentPaid: parsedRentPaid,
         rentEarned: parsedRentEarned,
         bankruptcies: parsedBankruptcies,
+        hotelsBuilt: parsedHotelsBuilt,
         level: calculatedLevel
       };
       inMemoryUsers.set(email, updated);

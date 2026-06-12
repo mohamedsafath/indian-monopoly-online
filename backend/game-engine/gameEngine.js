@@ -288,6 +288,7 @@ const initializeGame = (roomId, players) => {
       propertiesMortgagedCount:   0,
       auctionsWonCount:           0,
       rentPaidAmount:             0,
+      hotelsBuiltCount:           0,
     };
   });
 
@@ -919,6 +920,7 @@ const buildHotel = (gameState, playerId, tileId) => {
   gameState.hotelBank -= 1;
   prop.houses          = 0;
   prop.hotel           = true;
+  player.hotelsBuiltCount = (player.hotelsBuiltCount ?? 0) + 1;
 
   const events = [evt(
     EVENT_TYPES.HOTEL_BUILT,
@@ -1433,6 +1435,7 @@ const getPlayerRankingData = (gameState) => {
       auctionsWon: player.auctionsWonCount ?? 0,
       rentPaid: player.rentPaidAmount ?? 0,
       rentEarned: player.rentCollected ?? 0,
+      hotelsBuiltCount: player.hotelsBuiltCount ?? 0,
     };
   });
 };

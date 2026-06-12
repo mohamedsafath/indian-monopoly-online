@@ -102,6 +102,73 @@ const STYLE_CATEGORIES = [
   }
 ];
 
+const ACHIEVEMENTS = [
+  {
+    id: 'industrialist',
+    title: 'Industrialist',
+    description: 'Build 5 hotels over your lifetime.',
+    icon: '🏨',
+    target: 5,
+    current: (p) => p.hotelsBuilt || 0
+  },
+  {
+    id: 'banker',
+    title: 'Banker',
+    description: 'Request 10 emergency bank loans.',
+    icon: '🏦',
+    target: 10,
+    current: (p) => p.loansTaken || 0
+  },
+  {
+    id: 'tycoon',
+    title: 'Tycoon',
+    description: 'Accumulate ₹5,00,000 in total lifetime wealth.',
+    icon: '👑',
+    target: 500000,
+    current: (p) => p.totalNetWorthEarned || 0
+  },
+  {
+    id: 'monopolist',
+    title: 'Monopolist',
+    description: 'Purchase 30 properties across your matches.',
+    icon: '🏠',
+    target: 30,
+    current: (p) => p.propertiesPurchased || 0
+  },
+  {
+    id: 'auction_master',
+    title: 'Auction Master',
+    description: 'Win 15 properties in public auctions.',
+    icon: '🔨',
+    target: 15,
+    current: (p) => p.auctionsWon || 0
+  },
+  {
+    id: 'mega_landlord',
+    title: 'Mega Landlord',
+    description: 'Collect ₹1,00,000 in total rent from tenants.',
+    icon: '💰',
+    target: 100000,
+    current: (p) => p.rentEarned || 0
+  },
+  {
+    id: 'high_roller',
+    title: 'High Roller',
+    description: 'Reach Player Level 10.',
+    icon: '🎲',
+    target: 10,
+    current: (p) => p.level || 1
+  },
+  {
+    id: 'resilient',
+    title: 'Resilient',
+    description: 'Complete 15 matches without declaring bankruptcy.',
+    icon: '🛡️',
+    target: 15,
+    current: (p) => Math.max(0, (p.games || 0) - (p.bankruptcies || 0))
+  }
+];
+
 export default function ProfilePage() {
   const { userId } = useParams();
   const navigate = useNavigate();
@@ -489,6 +556,96 @@ export default function ProfilePage() {
               color="#6b7280"
             />
           </div>
+
+          {/* 🏅 Player Achievements Ledger */}
+          <div className="flex flex-col gap-4 mt-2">
+            <span className="text-[10px] font-black text-yellow-500/50 uppercase tracking-widest block text-center md:text-left">
+              🏅 Player Achievements Ledger
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {ACHIEVEMENTS.map((ach) => {
+                const current = ach.current(player);
+                const isUnlocked = current >= ach.target;
+                const progressPct = Math.min(100, (current / ach.target) * 100);
+
+                return (
+                  <div
+                    key={ach.id}
+                    className="p-4 rounded-2xl border flex items-start gap-4 transition-all duration-200 hover:scale-[1.01]"
+                    style={{
+                      background: isUnlocked
+                        ? 'linear-gradient(135deg, rgba(212,175,55,0.06) 0%, rgba(245,158,11,0.02) 100%)'
+                        : 'rgba(255,255,255,0.01)',
+                      borderColor: isUnlocked ? 'rgba(212,175,55,0.3)' : 'rgba(255,255,255,0.04)',
+                      boxShadow: isUnlocked
+                        ? '0 8px 24px rgba(212,175,55,0.1), inset 0 0 10px rgba(212,175,55,0.02)'
+                        : 'none',
+                    }}
+                  >
+                    {/* Badge Icon */}
+                    <div
+                      className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl flex-shrink-0"
+                      style={{
+                        background: isUnlocked
+                          ? 'rgba(212,175,55,0.12)'
+                          : 'rgba(255,255,255,0.03)',
+                        border: isUnlocked
+                          ? '1px solid rgba(212,175,55,0.3)'
+                          : '1px solid rgba(255,255,255,0.05)',
+                        filter: isUnlocked ? 'none' : 'grayscale(100%) opacity(40%)',
+                      }}
+                    >
+                      {ach.icon}
+                    </div>
+
+                    {/* Badge Details */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-start mb-0.5">
+                        <h4
+                          className="text-xs font-bold uppercase tracking-wider truncate"
+                          style={{ color: isUnlocked ? '#fde68a' : '#9ca3af' }}
+                        >
+                          {ach.title}
+                        </h4>
+                        {isUnlocked ? (
+                          <span className="text-[8px] font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.2 rounded uppercase">
+                            Unlocked
+                          </span>
+                        ) : (
+                          <span className="text-[8px] font-black text-stone-500 bg-stone-500/10 border border-stone-500/15 px-1.5 py-0.2 rounded uppercase">
+                            Locked
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-gray-500 mb-2 leading-tight">
+                        {ach.description}
+                      </p>
+
+                      {/* Progress bar */}
+                      <div className="flex items-center gap-2">
+                        <div className="flex-grow h-1.5 rounded-full bg-white/5 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-300"
+                            style={{
+                              width: `${progressPct}%`,
+                              background: isUnlocked
+                                ? 'linear-gradient(90deg, #d4af37, #fde68a)'
+                                : '#4b5563',
+                            }}
+                          />
+                        </div>
+                        <span className="text-[9px] font-bold text-gray-500 whitespace-nowrap">
+                          {current.toLocaleString('en-IN')} / {ach.target.toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{ height:'1px', background:'rgba(255,255,255,0.05)' }} className="my-2" />
 
           {/* 🎮 Completed Match History Section */}
           <div className="flex flex-col gap-4 mt-2">

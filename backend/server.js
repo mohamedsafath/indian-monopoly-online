@@ -169,7 +169,8 @@ authRouter.post("/update-stats", verifyPlayerAuth, async (req, res) => {
       auctionsWon,
       rentPaid,
       rentEarned,
-      bankruptcies
+      bankruptcies,
+      hotelsBuilt
     } = req.body;
     if (!playerId) {
       return res.status(400).json({ ok: false, error: "Missing playerId." });
@@ -192,7 +193,8 @@ authRouter.post("/update-stats", verifyPlayerAuth, async (req, res) => {
       auctionsWon,
       rentPaid,
       rentEarned,
-      bankruptcies
+      bankruptcies,
+      hotelsBuilt
     );
     
     if (!updatedUser) {

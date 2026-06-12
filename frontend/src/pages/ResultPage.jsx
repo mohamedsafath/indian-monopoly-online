@@ -131,6 +131,7 @@ export default function ResultPage() {
             user.rentPaid = (user.rentPaid ?? 0) + (myRank.rentPaid ?? 0);
             user.rentEarned = (user.rentEarned ?? 0) + (myRank.rentEarned ?? 0);
             user.bankruptcies = (user.bankruptcies ?? 0) + (myRank.isBankrupt ? 1 : 0);
+            user.hotelsBuilt = (user.hotelsBuilt ?? 0) + (myRank.hotelsBuiltCount ?? 0);
 
             // Recalculate level
             user.level = Math.floor((user.wins ?? 0) * 0.3) + 1;
@@ -160,7 +161,8 @@ export default function ResultPage() {
                   auctionsWon: user.auctionsWon,
                   rentPaid: user.rentPaid,
                   rentEarned: user.rentEarned,
-                  bankruptcies: user.bankruptcies
+                  bankruptcies: user.bankruptcies,
+                  hotelsBuilt: user.hotelsBuilt
                 })
               }).catch(e => console.error("Failed to sync stats to server:", e));
             }
