@@ -102,7 +102,7 @@ const formatMentions = (text, players = []) => {
 };
 
 // ── Chat bubble ───────────────────────────────────────────────────────────────
-function ChatBubble({ msg, isMe, players = [] }) {
+const ChatBubble = React.memo(function ChatBubble({ msg, isMe, players = [] }) {
   if (msg.playerId === 'system' || msg.isSystem) {
     return (
       <div className="w-full my-1 flex justify-center animate-fade-in">
@@ -152,7 +152,7 @@ function ChatBubble({ msg, isMe, players = [] }) {
       )}
     </div>
   );
-}
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN COMPONENT

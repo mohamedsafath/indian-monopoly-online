@@ -95,7 +95,7 @@ const tileName = (pos) => TILE_NAMES[pos] ?? `Tile ${pos}`;
 // SUB-COMPONENTS
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PlayerCard({ player, index, isCurrentTurn, isMe, isViewerSpectator = false }) {
+const PlayerCard = React.memo(function PlayerCard({ player, index, isCurrentTurn, isMe, isViewerSpectator = false }) {
   const ownedCount = player.ownedProperties?.length ?? 0;
   const token = player.token || PLAYER_TOKENS[index % PLAYER_TOKENS.length];
   const showMoney = isMe || isViewerSpectator;
@@ -155,9 +155,9 @@ function PlayerCard({ player, index, isCurrentTurn, isMe, isViewerSpectator = fa
       </div>
     </div>
   );
-}
+});
 
-function ActionButton({ label, onClick, disabled, variant = 'primary', loading = false }) {
+const ActionButton = React.memo(function ActionButton({ label, onClick, disabled, variant = 'primary', loading = false }) {
   const isPrimary = variant === 'primary';
   const isDanger  = variant === 'danger';
   const bg    = disabled ? 'rgba(255,255,255,0.04)'
@@ -180,9 +180,9 @@ function ActionButton({ label, onClick, disabled, variant = 'primary', loading =
       {loading ? '…' : label}
     </button>
   );
-}
+});
 
-function Toast({ message, type = 'error', onClose }) {
+const Toast = React.memo(function Toast({ message, type = 'error', onClose }) {
   useEffect(() => { const t = setTimeout(onClose, 4000); return () => clearTimeout(t); }, [onClose]);
   const colors = {
     error:   { bg:'rgba(239,68,68,0.15)',   border:'rgba(239,68,68,0.3)',   text:'#fca5a5' },
@@ -198,7 +198,7 @@ function Toast({ message, type = 'error', onClose }) {
       <button onClick={onClose} style={{ opacity:0.6, cursor:'pointer' }}>✕</button>
     </div>
   );
-}
+});
 
 const QUICK_EMOJIS = ['🎲', '🏠', '💰', '💸', '🔒', '🤝', '☠️', '🎉', '🔥', '👏'];
 
@@ -236,7 +236,7 @@ const formatMentions = (text, players = []) => {
 };
 
 // ── Chat bubble ───────────────────────────────────────────────────────────────
-function ChatBubble({ msg, isMe, players = [] }) {
+const ChatBubble = React.memo(function ChatBubble({ msg, isMe, players = [] }) {
   if (msg.playerId === 'system' || msg.isSystem) {
     return (
       <div className="w-full my-1 flex justify-center animate-fade-in">
@@ -286,7 +286,7 @@ function ChatBubble({ msg, isMe, players = [] }) {
       )}
     </div>
   );
-}
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MAIN PAGE
@@ -1271,7 +1271,217 @@ export default function GameRoom() {
     .filter(p => p.tile)
     .sort((a, b) => a.tile.position - b.tile.position);
 
+  // Memoized player roster list for sidebar
+  const sidebarPlayerRoster = useMemo(() => {
+    if (players.length === 0) {
+      return <p className="text-xs" style={{ color:'rgba(156,163,175,0.3)' }}>No players found</p>;
+    }
+    const isViewerSpectator = sessionStorage.getItem('mi_isSpectator') === 'true';
+    return players.map((p, i) => (
+      <PlayerCard 
+        key={p.id} 
+        player={p} 
+        index={i}
+        isCurrentTurn={p.id === currentPlayerId} 
+        isMe={p.id === myId}
+        isViewerSpectator={isViewerSpectator} 
+      />
+    ));
+  }, [players, currentPlayerId, myId]);
 
+  // Memoized player roster list for mobile tabs
+  const mobilePlayerRoster = useMemo(() => {
+    const isViewerSpectator = sessionStorage.getItem('mi_isSpectator') === 'true';
+    return players.map((p, i) => (
+      <PlayerCard 
+        key={p.id} 
+        player={p} 
+        index={i} 
+        isCurrentTurn={p.id === currentPlayerId} 
+        isMe={p.id === myId}
+        isViewerSpectator={isViewerSpectator} 
+      />
+    ));
+  }, [players, currentPlayerId, myId]);
+
+  // Memoized mobile scroll cards
+  const mobileScrollCards = useMemo(() => {
+    return players.map((p, idx) => {
+      const isCurrent = p.id === currentPlayerId;
+      const isMe = p.id === myId;
+      const token = p.token || PLAYER_TOKENS[idx % PLAYER_TOKENS.length];
+      return (
+        <div
+          key={p.id}
+          id={`player-card-mobile-${p.id}`}
+          onClick={() => setShowPlayersModal(true)}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold flex-shrink-0 transition-all border cursor-pointer active:scale-95 hover:border-yellow-500/50"
+          style={{
+            borderColor: isCurrent ? '#f59e0b' : 'rgba(255,255,255,0.06)',
+            background: isCurrent ? 'rgba(245,158,11,0.08)' : 'rgba(255,255,255,0.02)',
+            color: isCurrent ? '#fbbf24' : '#d1d5db'
+          }}
+        >
+          <span>{token}</span>
+          <span className="truncate max-w-[80px]">{p.username}</span>
+          <span className="opacity-80">₹{Number(p.money ?? 0).toLocaleString('en-IN')}</span>
+          {isMe && <span className="text-[7px] px-1 py-0.2 rounded bg-yellow-500/15 text-yellow-500 font-bold uppercase ml-0.5">You</span>}
+          {p.isBankrupt && <span className="text-[7px] px-1 py-0.2 rounded bg-red-500/15 text-red-500 font-bold uppercase ml-0.5">☠</span>}
+        </div>
+      );
+    });
+  }, [players, currentPlayerId, myId]);
+
+  // Memoized chat list for sidebar
+  const sidebarChatMessages = useMemo(() => {
+    if (chatMessages.length === 0) {
+      return <p className="text-xs text-center mt-4" style={{ color:'rgba(156,163,175,0.25)' }}>No messages yet</p>;
+    }
+    return chatMessages.map((msg) => (
+      <ChatBubble key={msg.id} msg={msg} isMe={msg.playerId === myId} players={players} />
+    ));
+  }, [chatMessages, myId, players]);
+
+  // Memoized chat list for mobile tabs
+  const mobileChatMessages = useMemo(() => {
+    if (chatMessages.length === 0) {
+      return <p className="text-xs text-center mt-4" style={{ color: 'rgba(156,163,175,0.25)' }}>No messages yet</p>;
+    }
+    return chatMessages.map((msg) => (
+      <ChatBubble key={msg.id} msg={msg} isMe={msg.playerId === myId} players={players} />
+    ));
+  }, [chatMessages, myId, players]);
+
+  // Memoized MonopolyBoard to block rendering of the entire board grid when unrelated state updates
+  const memoizedBoard = useMemo(() => {
+    return (
+      <MonopolyBoard
+        gameState={gameState}
+        myId={myId}
+        isMyTurn={isMyTurn}
+        hasRolled={hasRolled}
+        dicePhase={dicePhase}
+        displayDice={displayDice}
+        onRoll={handleRollDice}
+        onBuy={handleBuyProp}
+        onEndTurn={handleEndTurn}
+        showTradeModal={showTradeModal}
+        setShowTradeModal={setShowTradeModal}
+        showBuildPanel={showBuildPanel}
+        setShowBuildPanel={setShowBuildPanel}
+        showLoanModal={showLoanModal}
+        setShowLoanModal={setShowLoanModal}
+        pendingCardDraw={boardAnimation.pendingCardDraw}
+        activeCard={boardAnimation.activeCard}
+        onDeckClick={handleDeckClick}
+        onDismissCard={handleDismissCard}
+        pendingPurchase={boardAnimation.pendingPurchase}
+        onDismissPurchase={boardAnimation.dismissPurchase}
+        rentInfo={boardAnimation.rentInfo}
+        onDismissRent={handleDismissRent}
+        activeTrade={boardAnimation.activeTrade}
+        onInitiateTrade={handleInitiateTrade}
+        onAcceptTrade={handleAcceptTrade}
+        onRejectTrade={handleRejectTrade}
+        onCancelTrade={handleCancelTrade}
+        onBuildHouse={handleBuildHouse}
+        onBuildHotel={handleBuildHotel}
+        onSellHouse={handleSellHouse}
+        onSellHotel={handleSellHotel}
+        onPlaceBid={handlePlaceBid}
+        onPassAuction={handlePassAuction}
+        onAuctionProperty={handleAuctionProperty}
+        onTakeLoan={handleTakeLoan}
+        onRepayLoan={handleRepayLoan}
+        onDeclareBankruptcy={handleDeclareBankruptcy}
+        activeToast={boardAnimation.activeToast}
+        flashTile={boardAnimation.flashTile}
+        displayPositions={displayPositions}
+        arrivingPlayers={arrivingPlayers}
+        teleportingPlayers={teleportingPlayers}
+      />
+    );
+  }, [
+    gameState,
+    myId,
+    isMyTurn,
+    hasRolled,
+    dicePhase,
+    displayDice,
+    handleRollDice,
+    handleBuyProp,
+    handleEndTurn,
+    showTradeModal,
+    showBuildPanel,
+    showLoanModal,
+    boardAnimation.pendingCardDraw,
+    boardAnimation.activeCard,
+    handleDeckClick,
+    handleDismissCard,
+    boardAnimation.pendingPurchase,
+    boardAnimation.dismissPurchase,
+    boardAnimation.rentInfo,
+    handleDismissRent,
+    boardAnimation.activeTrade,
+    handleInitiateTrade,
+    handleAcceptTrade,
+    handleRejectTrade,
+    handleCancelTrade,
+    handleBuildHouse,
+    handleBuildHotel,
+    handleSellHouse,
+    handleSellHotel,
+    handlePlaceBid,
+    handlePassAuction,
+    handleAuctionProperty,
+    handleTakeLoan,
+    handleRepayLoan,
+    handleDeclareBankruptcy,
+    boardAnimation.activeToast,
+    boardAnimation.flashTile,
+    displayPositions,
+    arrivingPlayers,
+    teleportingPlayers
+  ]);
+
+  // Keyboard Navigation / Hotkeys (Space to roll, B to buy, E to end turn)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      const targetTag = e.target.tagName?.toLowerCase();
+      if (targetTag === 'input' || targetTag === 'textarea' || e.target.isContentEditable) {
+        return;
+      }
+
+      if (e.key === ' ') {
+        if (canRoll) {
+          e.preventDefault();
+          handleRollDice();
+        }
+      } else if (e.key?.toLowerCase() === 'b') {
+        const isPurchasePending = !!boardAnimation.pendingPurchase;
+        if (isMyTurn && isPurchasePending) {
+          e.preventDefault();
+          handleBuyProp();
+          boardAnimation.dismissPurchase?.();
+        }
+      } else if (e.key?.toLowerCase() === 'e') {
+        const isPurchasePending = !!boardAnimation.pendingPurchase;
+        if (isMyTurn) {
+          if (isPurchasePending) {
+            e.preventDefault();
+            handleEndTurn();
+            boardAnimation.dismissPurchase?.();
+          } else if (canEnd) {
+            e.preventDefault();
+            handleEndTurn();
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [canRoll, isMyTurn, canEnd, boardAnimation.pendingPurchase, boardAnimation.dismissPurchase, handleRollDice, handleBuyProp, handleEndTurn]);
 
   // ─────────────────────────────────────────────────────────────────────────
   if (loading) {
@@ -1767,30 +1977,7 @@ export default function GameRoom() {
       {/* Mobile compact horizontal player scroll bar */}
       <div className="flex lg:hidden overflow-x-auto gap-2 px-3 py-2 flex-shrink-0 scrollbar-none" 
            style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', background: 'rgba(0,0,0,0.2)' }}>
-        {players.map((p, idx) => {
-          const isCurrent = p.id === currentPlayerId;
-          const isMe = p.id === myId;
-          const token = p.token || PLAYER_TOKENS[idx % PLAYER_TOKENS.length];
-          return (
-            <div
-              key={p.id}
-              id={`player-card-mobile-${p.id}`}
-              onClick={() => setShowPlayersModal(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold flex-shrink-0 transition-all border cursor-pointer active:scale-95 hover:border-yellow-500/50"
-              style={{
-                borderColor: isCurrent ? '#f59e0b' : 'rgba(255,255,255,0.06)',
-                background: isCurrent ? 'rgba(245,158,11,0.08)' : 'rgba(255,255,255,0.02)',
-                color: isCurrent ? '#fbbf24' : '#d1d5db'
-              }}
-            >
-              <span>{token}</span>
-              <span className="truncate max-w-[80px]">{p.username}</span>
-              <span className="opacity-80">₹{Number(p.money ?? 0).toLocaleString('en-IN')}</span>
-              {isMe && <span className="text-[7px] px-1 py-0.2 rounded bg-yellow-500/15 text-yellow-500 font-bold uppercase ml-0.5">You</span>}
-              {p.isBankrupt && <span className="text-[7px] px-1 py-0.2 rounded bg-red-500/15 text-red-500 font-bold uppercase ml-0.5">☠</span>}
-            </div>
-          );
-        })}
+        {mobileScrollCards}
       </div>
 
       {/* Body */}
@@ -1820,14 +2007,7 @@ export default function GameRoom() {
                 <h3 className="text-xs font-bold uppercase tracking-widest"
                   style={{ color:'rgba(212,175,55,0.5)' }}>Players</h3>
 
-                {players.length === 0
-                  ? <p className="text-xs" style={{ color:'rgba(156,163,175,0.3)' }}>No players found</p>
-                  : players.map((p, i) => (
-                    <PlayerCard key={p.id} player={p} index={i}
-                      isCurrentTurn={p.id === currentPlayerId} isMe={p.id === myId}
-                      isViewerSpectator={sessionStorage.getItem('mi_isSpectator') === 'true'} />
-                  ))
-                }
+                {sidebarPlayerRoster}
 
                 {spectators.length > 0 && (
                   <div className="mt-3 pt-3 border-t border-white/5 flex flex-col gap-2">
@@ -1952,60 +2132,7 @@ export default function GameRoom() {
         {/* Board */}
         <main className="w-full h-auto lg:h-auto lg:flex-1 flex-shrink-0 flex items-center justify-center p-1 lg:py-2 lg:px-4 lg:overflow-hidden mx-auto" 
               style={{ position:'relative', minWidth:0, width: 'var(--board-width, 100%)', height: 'var(--board-height, auto)' }}>
-          <MonopolyBoard
-            gameState={gameState}
-            myId={myId}
-            isMyTurn={isMyTurn}
-            hasRolled={hasRolled}
-            dicePhase={dicePhase}
-            displayDice={displayDice}
-            onRoll={handleRollDice}
-            onBuy={handleBuyProp}
-            onEndTurn={handleEndTurn}
-            // Sizing states
-            showTradeModal={showTradeModal}
-            setShowTradeModal={setShowTradeModal}
-            showBuildPanel={showBuildPanel}
-            setShowBuildPanel={setShowBuildPanel}
-            showLoanModal={showLoanModal}
-            setShowLoanModal={setShowLoanModal}
-            // Card system
-            pendingCardDraw={boardAnimation.pendingCardDraw}
-            activeCard={boardAnimation.activeCard}
-            onDeckClick={handleDeckClick}
-            onDismissCard={handleDismissCard}
-            // Purchase
-            pendingPurchase={boardAnimation.pendingPurchase}
-            onDismissPurchase={boardAnimation.dismissPurchase}
-            // Rent
-            rentInfo={boardAnimation.rentInfo}
-            onDismissRent={handleDismissRent}
-            // Trade
-            activeTrade={boardAnimation.activeTrade}
-            onInitiateTrade={handleInitiateTrade}
-            onAcceptTrade={handleAcceptTrade}
-            onRejectTrade={handleRejectTrade}
-            onCancelTrade={handleCancelTrade}
-            // Build
-            onBuildHouse={handleBuildHouse}
-            onBuildHotel={handleBuildHotel}
-            onSellHouse={handleSellHouse}
-            onSellHotel={handleSellHotel}
-            // Auction
-            onPlaceBid={handlePlaceBid}
-            onPassAuction={handlePassAuction}
-            onAuctionProperty={handleAuctionProperty}
-            // Loans & Bankruptcy
-            onTakeLoan={handleTakeLoan}
-            onRepayLoan={handleRepayLoan}
-            onDeclareBankruptcy={handleDeclareBankruptcy}
-            // Visuals
-            activeToast={boardAnimation.activeToast}
-            flashTile={boardAnimation.flashTile}
-            displayPositions={displayPositions}
-            arrivingPlayers={arrivingPlayers}
-            teleportingPlayers={teleportingPlayers}
-          />
+          {memoizedBoard}
 
 
         </main>
@@ -2023,12 +2150,7 @@ export default function GameRoom() {
             </div>
 
             <div className="flex-1 overflow-y-auto flex flex-col gap-2 p-3">
-              {chatMessages.length === 0
-                ? <p className="text-xs text-center mt-4" style={{ color:'rgba(156,163,175,0.25)' }}>No messages yet</p>
-                : chatMessages.map((msg) => (
-                    <ChatBubble key={msg.id} msg={msg} isMe={msg.playerId === myId} players={players} />
-                  ))
-              }
+              {sidebarChatMessages}
               <div ref={chatEndRef} />
             </div>
 
@@ -2365,10 +2487,7 @@ export default function GameRoom() {
                     </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {players.map((p, i) => (
-                      <PlayerCard key={p.id} player={p} index={i} isCurrentTurn={p.id === currentPlayerId} isMe={p.id === myId}
-                        isViewerSpectator={sessionStorage.getItem('mi_isSpectator') === 'true'} />
-                    ))}
+                    {mobilePlayerRoster}
                   </div>
                 </div>
 
@@ -2481,13 +2600,7 @@ export default function GameRoom() {
               <div className="flex flex-col h-[33vh] p-1 rounded-xl" style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.03)' }}>
                 {/* Chat Message feed */}
                 <div className="flex-grow overflow-y-auto flex flex-col gap-2 p-2">
-                  {chatMessages.length === 0 ? (
-                    <p className="text-xs text-center mt-4" style={{ color: 'rgba(156,163,175,0.25)' }}>No messages yet</p>
-                  ) : (
-                    chatMessages.map((msg) => (
-                      <ChatBubble key={msg.id} msg={msg} isMe={msg.playerId === myId} players={players} />
-                    ))
-                  )}
+                  {mobileChatMessages}
                 </div>
 
                 {/* Chat Input */}

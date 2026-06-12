@@ -88,6 +88,30 @@ const connectDB = async () => {
 };
 
 // 3. Save / Upsert Room
+// MongoDB Debouncing maps
+const pendingDebounceTimers = new Map(); // roomCode -> NodeJS.Timeout
+const lastSavedMetadata = new Map();     // roomCode -> { status, currentPlayerId, lastWriteTime }
+const roomMemoryCache = new Map();        // roomCode -> serializedRoom
+
+// Helper to execute MongoDB write
+const _writeRoomToDB = async (serializedRoom) => {
+  try {
+    await Room.findOneAndUpdate(
+      { code: serializedRoom.code },
+      serializedRoom,
+      { upsert: true, new: true }
+    );
+    lastSavedMetadata.set(serializedRoom.code, {
+      status: serializedRoom.status,
+      currentPlayerId: serializedRoom.gameState?.currentPlayerId || null,
+      lastWriteTime: Date.now(),
+    });
+  } catch (err) {
+    console.error(`[db] Failed to save room ${serializedRoom.code}:`, err.message);
+  }
+};
+
+// 3. Save / Upsert Room
 const saveRoom = async (room) => {
   const serializedRoom = {
     code: room.code,
@@ -101,14 +125,38 @@ const saveRoom = async (room) => {
   };
 
   if (isDbActive) {
-    try {
-      await Room.findOneAndUpdate(
-        { code: room.code },
-        serializedRoom,
-        { upsert: true, new: true }
-      );
-    } catch (err) {
-      console.error(`[db] Failed to save room ${room.code}:`, err.message);
+    const code = room.code;
+    const metadata = lastSavedMetadata.get(code);
+    
+    const statusChanged = !metadata || metadata.status !== room.status;
+    const turnTransition = !metadata || (room.gameState && metadata.currentPlayerId !== room.gameState.currentPlayerId);
+    const gameFinished = room.gameState && room.gameState.status === 'finished';
+    const timeLimitReached = metadata && (Date.now() - metadata.lastWriteTime >= 5000);
+
+    const isCritical = statusChanged || turnTransition || gameFinished || timeLimitReached;
+
+    // Cache the latest data in memory
+    roomMemoryCache.set(code, serializedRoom);
+
+    if (isCritical) {
+      // Clear any pending debounced timeout
+      if (pendingDebounceTimers.has(code)) {
+        clearTimeout(pendingDebounceTimers.get(code));
+        pendingDebounceTimers.delete(code);
+      }
+      await _writeRoomToDB(serializedRoom);
+    } else {
+      // Setup debounced write if not already pending
+      if (!pendingDebounceTimers.has(code)) {
+        const timer = setTimeout(async () => {
+          pendingDebounceTimers.delete(code);
+          const latest = roomMemoryCache.get(code);
+          if (latest) {
+            await _writeRoomToDB(latest);
+          }
+        }, 5000);
+        pendingDebounceTimers.set(code, timer);
+      }
     }
   } else {
     inMemoryRooms.set(room.code, serializedRoom);
@@ -118,6 +166,14 @@ const saveRoom = async (room) => {
 
 // 4. Delete Room
 const deleteRoom = async (code) => {
+  // Clear any pending write timers and cache maps
+  if (pendingDebounceTimers.has(code)) {
+    clearTimeout(pendingDebounceTimers.get(code));
+    pendingDebounceTimers.delete(code);
+  }
+  lastSavedMetadata.delete(code);
+  roomMemoryCache.delete(code);
+
   if (isDbActive) {
     try {
       await Room.deleteOne({ code });

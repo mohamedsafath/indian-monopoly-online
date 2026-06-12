@@ -57,9 +57,13 @@ export const CornerTile = React.memo(function CornerTile({
   const cfg = CORNER_CONFIG[tileId];
   if (!cfg) return null;
 
+  const handleClick = React.useCallback(() => {
+    if (onClick) onClick(tileId);
+  }, [onClick, tileId]);
+
   return (
     <div
-      onClick={onClick}
+      onClick={handleClick}
       style={{
         gridColumn: tileId === 0  ? '11 / 12' :
                     tileId === 10 ? '1 / 2'   :

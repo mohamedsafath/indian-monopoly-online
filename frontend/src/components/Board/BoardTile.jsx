@@ -267,10 +267,14 @@ export const BoardTile = React.memo(function BoardTile({
   const flexAlignment = 'center';
 
 
+  const handleClick = React.useCallback(() => {
+    if (onClick && tile) onClick(tile.id);
+  }, [onClick, tile?.id]);
+
   return (
     <div
       style={containerStyle}
-      onClick={onClick}
+      onClick={handleClick}
       title={tile.name}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}

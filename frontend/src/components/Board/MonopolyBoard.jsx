@@ -551,7 +551,7 @@ export const MonopolyBoard = React.memo(function MonopolyBoard({
                   key={id}
                   tileId={id}
                   isOccupied={occupiedTiles.has(id)}
-                  onClick={() => handleTileClick(id)}
+                  onClick={handleTileClick}
                 />
               ))}
 
@@ -572,7 +572,7 @@ export const MonopolyBoard = React.memo(function MonopolyBoard({
                     gridColumn={pos.col + 1}
                     gridRow={pos.row + 1}
                     isActive={occupiedTiles.has(tile.id)}
-                    onClick={() => handleTileClick(tile.id)}
+                    onClick={handleTileClick}
                   />
                 );
               })}
