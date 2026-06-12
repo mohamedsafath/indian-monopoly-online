@@ -5,7 +5,7 @@
  * Subscribes to socket room events and renders the current room state.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate }                   from 'react-router-dom';
 import socket                                        from '@/socket/socket';
 import socketService                                 from '@/services/socketService';
