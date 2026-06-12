@@ -39,6 +39,7 @@ function GuestGuard({ children }) {
 
 import ProfilePage from './pages/ProfilePage';
 import AdminDashboard from './pages/AdminDashboard';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 // CreatorFooter is now imported and rendered inline in page layouts
 
@@ -53,22 +54,22 @@ function App() {
         <Route path="/login" element={<Navigate to="/" replace />} />
 
         {/* Home (Room Management) */}
-        <Route path="/home" element={<AuthGuard><Home /></AuthGuard>} />
+        <Route path="/home" element={<AuthGuard><ErrorBoundary><Home /></ErrorBoundary></AuthGuard>} />
 
         {/* Lobby */}
-        <Route path="/lobby/:roomCode" element={<AuthGuard><Lobby /></AuthGuard>} />
+        <Route path="/lobby/:roomCode" element={<AuthGuard><ErrorBoundary><Lobby /></ErrorBoundary></AuthGuard>} />
 
         {/* Game Room */}
-        <Route path="/game/:roomCode" element={<AuthGuard><GameRoom /></AuthGuard>} />
+        <Route path="/game/:roomCode" element={<AuthGuard><ErrorBoundary><GameRoom /></ErrorBoundary></AuthGuard>} />
 
         {/* Profile Page */}
-        <Route path="/profile/:userId" element={<AuthGuard><ProfilePage /></AuthGuard>} />
+        <Route path="/profile/:userId" element={<AuthGuard><ErrorBoundary><ProfilePage /></ErrorBoundary></AuthGuard>} />
 
         {/* Result Page */}
-        <Route path="/results/:roomCode" element={<AuthGuard><ResultPage /></AuthGuard>} />
+        <Route path="/results/:roomCode" element={<AuthGuard><ErrorBoundary><ResultPage /></ErrorBoundary></AuthGuard>} />
 
         {/* Admin Dashboard */}
-        <Route path="/admin" element={<AuthGuard><AdminDashboard /></AuthGuard>} />
+        <Route path="/admin" element={<AuthGuard><ErrorBoundary><AdminDashboard /></ErrorBoundary></AuthGuard>} />
       </Routes>
     </BrowserRouter>
   );
