@@ -167,6 +167,7 @@ const initiateTrade = (targetId, offer, request) =>
 const acceptTrade  = ()  => emit('accept-trade');
 const rejectTrade  = ()  => emit('reject-trade');
 const cancelTrade  = ()  => emit('cancel-trade');
+const toggleAutoplay = (autoplay) => emit('toggle-autoplay', { autoplay });
 
 // Auction
 const placeBid            = (amount) => emit('place-bid',    { amount });
@@ -224,6 +225,7 @@ const socketService = {
   acceptTrade,
   rejectTrade,
   cancelTrade,
+  toggleAutoplay,
   placeBid,
   passAuction,
   startPropertyAuction,

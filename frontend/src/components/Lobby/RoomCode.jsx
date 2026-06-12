@@ -13,7 +13,7 @@ export default function RoomCode({ code = '' }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
-    const lobbyLink = `${window.location.origin}/lobby/${code}`;
+    const lobbyLink = `${window.location.origin}/game/${code}?join=true`;
     try {
       await navigator.clipboard.writeText(lobbyLink);
       setCopied(true);
@@ -44,7 +44,7 @@ export default function RoomCode({ code = '' }) {
           onClick={handleCopy}
           onCopy={(e) => {
             e.preventDefault();
-            e.clipboardData.setData('text/plain', `${window.location.origin}/lobby/${code}`);
+            e.clipboardData.setData('text/plain', `${window.location.origin}/game/${code}?join=true`);
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
           }}

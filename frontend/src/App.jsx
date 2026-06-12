@@ -12,8 +12,9 @@ function AuthGuard({ children }) {
     const stored = localStorage.getItem('mi_google_user');
     if (!stored) {
       const path = window.location.pathname;
-      if (path.startsWith('/lobby/')) {
-        sessionStorage.setItem('mi_redirect_lobby', path);
+      const search = window.location.search;
+      if (path.startsWith('/lobby/') || path.startsWith('/game/')) {
+        sessionStorage.setItem('mi_redirect_lobby', path + search);
       }
       return <Navigate to="/" replace />;
     }

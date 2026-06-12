@@ -82,41 +82,34 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Handle splash screen timeout
-  useEffect(() => {
-    if (!showSplash) return;
-    
-    const fadeTimer = setTimeout(() => {
-      setSplashFade(true);
-    }, 3000);
-
-    const doneTimer = setTimeout(() => {
-      try {
-        const stored = localStorage.getItem('mi_google_user');
-        if (stored) {
-          navigateToDestination();
-        } else {
-          setShowSplash(false);
-        }
-      } catch (e) {
-        setShowSplash(false);
-      }
-    }, 3500);
-
-    return () => {
-      clearTimeout(fadeTimer);
-      clearTimeout(doneTimer);
-    };
-  }, [showSplash]);
-
   const navigateToDestination = () => {
     const redirectPath = sessionStorage.getItem('mi_redirect_lobby');
-    if (redirectPath && redirectPath.startsWith('/lobby/')) {
+    if (redirectPath && (redirectPath.startsWith('/lobby/') || redirectPath.startsWith('/game/'))) {
       sessionStorage.removeItem('mi_redirect_lobby');
       navigate(redirectPath);
     } else {
       navigate('/home');
     }
+  };
+
+  // Play as Guest flow
+  const handleGuestLogin = () => {
+    const guestNum = Math.floor(1000 + Math.random() * 9000);
+    const guestUser = {
+      playerId: `guest_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      username: `Guest_${guestNum}`,
+      email: `guest_${guestNum}@gmail.com`,
+      avatar: `https://api.dicebear.com/7.x/adventurer/svg?seed=Guest${guestNum}`,
+      level: 1,
+      wins: 0,
+      games: 0,
+      losses: 0,
+      isGuest: true
+    };
+    localStorage.setItem('mi_google_user', JSON.stringify(guestUser));
+    sessionStorage.setItem('mi_playerId', guestUser.playerId);
+    sessionStorage.setItem('mi_username', guestUser.username);
+    navigateToDestination();
   };
 
   // Google Login API flow using real token credential
@@ -146,6 +139,39 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  // Handle splash screen timeout
+  useEffect(() => {
+    if (!showSplash) return;
+    
+    const fadeTimer = setTimeout(() => {
+      setSplashFade(true);
+    }, 3000);
+
+    const doneTimer = setTimeout(() => {
+      try {
+        const stored = localStorage.getItem('mi_google_user');
+        if (stored) {
+          navigateToDestination();
+        } else {
+          const redirectPath = sessionStorage.getItem('mi_redirect_lobby') || '';
+          const searchParams = window.location.search || '';
+          if (redirectPath.includes('join=true') || searchParams.includes('join=true')) {
+            handleGuestLogin();
+          } else {
+            setShowSplash(false);
+          }
+        }
+      } catch (e) {
+        setShowSplash(false);
+      }
+    }, 3500);
+
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(doneTimer);
+    };
+  }, [showSplash]);
 
   // Initialize Google Sign-In button
   useEffect(() => {
@@ -178,26 +204,6 @@ export default function LoginPage() {
       return () => clearInterval(checkGoogleInterval);
     }
   }, [loginView]);
-
-  // Play as Guest flow
-  const handleGuestLogin = () => {
-    const guestNum = Math.floor(1000 + Math.random() * 9000);
-    const guestUser = {
-      playerId: `guest_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-      username: `Guest_${guestNum}`,
-      email: `guest_${guestNum}@gmail.com`,
-      avatar: `https://api.dicebear.com/7.x/adventurer/svg?seed=Guest${guestNum}`,
-      level: 1,
-      wins: 0,
-      games: 0,
-      losses: 0,
-      isGuest: true
-    };
-    localStorage.setItem('mi_google_user', JSON.stringify(guestUser));
-    sessionStorage.setItem('mi_playerId', guestUser.playerId);
-    sessionStorage.setItem('mi_username', guestUser.username);
-    navigateToDestination();
-  };
 
   // Splash Screen Render
   if (showSplash) {

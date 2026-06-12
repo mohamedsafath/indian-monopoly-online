@@ -189,6 +189,8 @@ const lobbySnapshot = (room) => ({
     ready:     p.ready,
     connected: p.connected,
     token:     p.token,
+    isBot:     Boolean(p.isBot),
+    autoplay:  Boolean(p.autoplay),
   })),
   spectators: (room.spectators || []).map((p) => ({
     id:        p.id,
@@ -418,12 +420,30 @@ const startAfkTimer = (io, room) => {
     const cp = currentPlayer(room.gameState);
     if (!cp) return;
 
+    const player = room.players.find(p => p.id === cp.id);
+    if (player) {
+      player.autoplay = true;
+      saveRoom(room);
+      io.to(room.code).emit('room-updated', envelope(true, { room: lobbySnapshot(room) }));
+
+      const sysMsg = {
+        id:       `sys-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        playerId: 'system',
+        username: 'System',
+        text:     `🤖 ${player.username} is AFK. AI Autoplay has been enabled.`,
+        ts:       Date.now(),
+        isSystem: true
+      };
+      room.chatHistory.push(sysMsg);
+      io.to(room.code).emit('receive-message', envelope(true, { message: sysMsg }));
+    }
+
     const result = skipAfkTurn(room.gameState, cp.id);
     if (result.ok) {
       broadcastEvents(io, room, result.events);
       broadcastGameState(io, room);
       startAfkTimer(io, room);   // restart for next player
-      triggerBotCycle(io, room); // trigger bot cycle in case next player is a bot
+      triggerBotCycle(io, room); // trigger bot cycle
     }
   }, TURN_TIMEOUT_SECONDS * 1000);
 };
@@ -940,7 +960,7 @@ const triggerBotCycle = (io, room) => {
   const endGameVote = room.gameState.endGameVote;
   if (endGameVote) {
     const botToAct = room.players.find(p => 
-      p.isBot && 
+      (p.isBot || p.autoplay || !p.connected) && 
       !room.gameState.players[p.id]?.isBankrupt &&
       endGameVote.votes[p.id] === undefined
     );
@@ -966,7 +986,7 @@ const triggerBotCycle = (io, room) => {
   const kickHostVote = room.gameState.kickHostVote;
   if (kickHostVote) {
     const botToAct = room.players.find(p => 
-      p.isBot && 
+      (p.isBot || p.autoplay || !p.connected) && 
       !room.gameState.players[p.id]?.isBankrupt &&
       p.id !== kickHostVote.targetId &&
       kickHostVote.votes[p.id] === undefined
@@ -993,7 +1013,7 @@ const triggerBotCycle = (io, room) => {
   const auction = room.gameState.activeAuction;
   if (auction) {
     const botToAct = room.players.find(p => 
-      p.isBot && 
+      (p.isBot || p.autoplay || !p.connected) && 
       auction.participants.includes(p.id) && 
       !auction.passedPlayers.includes(p.id) && 
       auction.highBidderId !== p.id
@@ -1018,7 +1038,7 @@ const triggerBotCycle = (io, room) => {
   // 2. Check if there is an active pending trade proposed to a bot
   const trade = room.gameState.activeTrade;
   if (trade && trade.status === 'pending') {
-    const botToAct = room.players.find(p => p.isBot && p.id === trade.toPlayerId);
+    const botToAct = room.players.find(p => (p.isBot || p.autoplay || !p.connected) && p.id === trade.toPlayerId);
     if (botToAct) {
       room.botExecutingAction = true;
       setTimeout(async () => {
@@ -1037,7 +1057,7 @@ const triggerBotCycle = (io, room) => {
 
   // 3. Check if it's a bot's standard turn
   const activePlayer = currentPlayer(room.gameState);
-  if (activePlayer && room.players.find(p => p.id === activePlayer.id && p.isBot)) {
+  if (activePlayer && room.players.find(p => p.id === activePlayer.id && (p.isBot || p.autoplay || !p.connected))) {
     const botId = activePlayer.id;
     room.botExecutingAction = true;
     setTimeout(async () => {
@@ -1376,6 +1396,7 @@ const mountGameSocket = (io) => {
       player.socketId      = socket.id;
       player.connected     = true;
       player.disconnectedAt = null;
+      player.autoplay      = false;
       socketToRoom.set(socket.id, trimmedCode);
       socket.join(trimmedCode);
 
@@ -2065,6 +2086,35 @@ const mountGameSocket = (io) => {
       ackOk(ack, {});
     });
 
+    // ── toggle-autoplay ──────────────────────────────────────────────────────
+    /**
+     * Toggles AI Autoplay for the player.
+     * Client payload: { autoplay: boolean }
+     */
+    socket.on('toggle-autoplay', ({ autoplay } = {}, ack) => {
+      const gr = guardInRoom(socket);
+      if (!gr.ok) return ackError(ack, gr.error);
+      const { room } = gr;
+
+      const player = findPlayerBySocket(room, socket.id);
+      if (!player) return ackError(ack, 'Player not found in this room');
+
+      player.autoplay = autoplay !== undefined ? Boolean(autoplay) : !player.autoplay;
+      saveRoom(room);
+
+      console.log(`[room] ${player.username} toggled autoplay to ${player.autoplay}`);
+
+      // Broadcast updated room state
+      io.to(room.code).emit('room-updated', envelope(true, { room: lobbySnapshot(room) }));
+
+      // If they turned on autoplay and it's their turn, run the bot cycle
+      if (player.autoplay) {
+        triggerBotCycle(io, room);
+      }
+
+      ackOk(ack, { autoplay: player.autoplay });
+    });
+
     // =========================================================================
     // 10.  DISCONNECT HANDLING
     // =========================================================================
@@ -2205,6 +2255,7 @@ const mountGameSocket = (io) => {
 
       console.log(`[room] ${player.username} disconnected from ${room.code}; grace ${RECONNECT_GRACE_MS}ms`);
       saveRoom(room);
+      triggerBotCycle(io, room);
 
       // Start grace timer
       player._graceTimer = setTimeout(() => {

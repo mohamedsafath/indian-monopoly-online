@@ -22,6 +22,7 @@ const PlayerSchema = new mongoose.Schema({
   disconnectedAt: { type: Number, default: null },
   isSpectator: { type: Boolean, default: false },
   isBot: { type: Boolean, default: false },
+  autoplay: { type: Boolean, default: false },
 });
 
 const RoomSchema = new mongoose.Schema({
@@ -150,6 +151,7 @@ const loadActiveRooms = async () => {
           disconnectedAt: p.disconnectedAt,
           isSpectator: Boolean(p.isSpectator),
           isBot: Boolean(p.isBot),
+          autoplay: Boolean(p.autoplay),
         })),
         spectators: (doc.spectators || []).map((p) => ({
           id: p.id,
@@ -184,6 +186,7 @@ const loadActiveRooms = async () => {
           disconnectedAt: p.disconnectedAt,
           isSpectator: Boolean(p.isSpectator),
           isBot: Boolean(p.isBot),
+          autoplay: Boolean(p.autoplay),
         })),
         spectators: (r.spectators || []).map((p) => ({
           id: p.id,

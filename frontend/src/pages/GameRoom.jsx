@@ -931,11 +931,21 @@ export default function GameRoom() {
       if (!data) return;
       pushFeedEvent(`${data.username} disconnected`, '⚡');
       showToast(`${data.username} disconnected`, 'warning');
+      setRoom((prev) => {
+        if (!prev) return prev;
+        return { ...prev, players: prev.players.map(p =>
+          p.id === data.playerId ? { ...p, connected: false } : p) };
+      });
     };
     const onPlayerReconnected = ({ data }) => {
       if (!data) return;
       pushFeedEvent(`${data.username} reconnected`, '✅');
       showToast(`${data.username} reconnected!`, 'success');
+      setRoom((prev) => {
+        if (!prev) return prev;
+        return { ...prev, players: prev.players.map(p =>
+          p.id === data.playerId ? { ...p, connected: true } : p) };
+      });
     };
     const onReceiveMessage    = ({ data }) => {
       if (data?.message) setChatMessages(prev => [...prev, data.message]);
@@ -1107,7 +1117,17 @@ export default function GameRoom() {
   }, [chatInput]);
 
   // ── Derived state ──────────────────────────────────────────────────────────
-  const players         = gameState ? Object.values(gameState.players) : [];
+  const players = gameState
+    ? Object.values(gameState.players).map(p => {
+        const roomPlayer = room?.players?.find(rp => rp.id === p.id);
+        return {
+          ...p,
+          isConnected: roomPlayer ? roomPlayer.connected : true,
+          autoplay: roomPlayer ? roomPlayer.autoplay : false,
+        };
+      })
+    : [];
+  const spectators      = room?.spectators ?? [];
   const filteredPlayers = players.filter(p =>
     p.id !== myId &&
     p.username.toLowerCase().includes(mentionSearch.toLowerCase())
@@ -1134,7 +1154,7 @@ export default function GameRoom() {
   const currentPlayerId = gameState?.currentPlayerId;
   const isMyTurn        = currentPlayerId === myId;
   const isHost          = room?.hostId === myId;
-  const me              = gameState?.players?.[myId];
+  const me              = players.find(p => p.id === myId);
   const hasRolled       = gameState?.hasRolled ?? false;
   const canRoll         = isMyTurn && !hasRolled && !me?.isBankrupt;
   const canEnd          = isMyTurn && hasRolled;
@@ -1149,6 +1169,24 @@ export default function GameRoom() {
     }
     prevIsMyTurnRef.current = isMyTurn;
   }, [isMyTurn]);
+
+  // Redirect back to lobby if room status is lobby
+  useEffect(() => {
+    if (room && room.status === 'lobby') {
+      navigate(`/lobby/${roomCode}`);
+    }
+  }, [room, roomCode, navigate]);
+
+  const handleToggleAutoplay = useCallback(async () => {
+    if (!me) return;
+    const nextVal = !me.autoplay;
+    try {
+      await socketService.toggleAutoplay(nextVal);
+      showToast(nextVal ? 'AI Autoplay enabled!' : 'AI Autoplay disabled.', 'info');
+    } catch (err) {
+      showToast(err.message || 'Failed to toggle autoplay', 'error');
+    }
+  }, [me, showToast]);
 
   // Helper: Get player card center for flying elements
   const getCardCenter = useCallback((playerId) => {
@@ -1791,6 +1829,22 @@ export default function GameRoom() {
                   ))
                 }
 
+                {spectators.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-white/5 flex flex-col gap-2">
+                    <span className="text-[10px] font-black text-amber-500/55 uppercase tracking-widest block text-left">
+                      👁️ Spectators ({spectators.length})
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {spectators.map(s => (
+                        <span key={s.id} className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold border flex items-center gap-1"
+                              style={{ background: 'rgba(255,255,255,0.02)', borderColor: 'rgba(212,175,55,0.15)', color: '#9ca3af' }}>
+                          👁️ {s.username} {s.connected === false && <span className="text-[8px] text-gray-500 font-bold">(off)</span>}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div style={{ height:'1px', background:'rgba(255,255,255,0.05)' }} />
 
                 <h3 className="text-xs font-bold uppercase tracking-widest"
@@ -1836,6 +1890,37 @@ export default function GameRoom() {
                 <ActionButton label="✔ End Turn"
                   onClick={handleEndTurn} disabled={!canEnd}
                   loading={actionLoading === 'end'} variant="secondary" />
+
+                {/* AI Autoplay Toggle Card */}
+                {sessionStorage.getItem('mi_isSpectator') !== 'true' && me && (
+                  <div className="mt-1 p-2.5 rounded-xl flex items-center justify-between transition-all duration-300"
+                       style={{
+                         background: me.autoplay ? 'rgba(245,158,11,0.08)' : 'rgba(255,255,255,0.02)',
+                         border: me.autoplay ? '1px solid rgba(245,158,11,0.25)' : '1px solid rgba(255,255,255,0.05)',
+                       }}>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-gray-300">
+                        🤖 AI Autoplay
+                      </span>
+                      <span className="text-[9px] text-gray-500 mt-0.5 leading-tight">
+                        Let bot take your turns
+                      </span>
+                    </div>
+                    <button
+                      onClick={handleToggleAutoplay}
+                      className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-300 cursor-pointer outline-none focus:outline-none"
+                      style={{
+                        background: me.autoplay ? '#f59e0b' : 'rgba(255,255,255,0.1)',
+                      }}
+                    >
+                      <span
+                        className={`${
+                          me.autoplay ? 'translate-x-5' : 'translate-x-1'
+                        } inline-block h-3 w-3 transform rounded-full bg-white transition-transform duration-300`}
+                      />
+                    </button>
+                  </div>
+                )}
 
                 {!isMyTurn && gameState && (
                   <p className="text-xs text-center mt-1"
@@ -2312,6 +2397,38 @@ export default function GameRoom() {
                         <ActionButton label="✔ End Turn" onClick={handleEndTurn} disabled={!canEnd} loading={actionLoading === 'end'} variant="secondary" />
                       </div>
                     </div>
+
+                    {/* AI Autoplay Toggle for Mobile (Lobby Tab) */}
+                    {me && (
+                      <div className="mt-1 p-2 rounded-lg flex items-center justify-between"
+                           style={{
+                             background: me.autoplay ? 'rgba(245,158,11,0.08)' : 'rgba(255,255,255,0.02)',
+                             border: me.autoplay ? '1px solid rgba(245,158,11,0.2)' : '1px solid rgba(255,255,255,0.05)',
+                           }}>
+                        <div className="flex flex-col">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-gray-300">
+                            🤖 AI Autoplay
+                          </span>
+                          <span className="text-[8px] text-gray-500 mt-0.5 leading-tight">
+                            Let bot play on your behalf
+                          </span>
+                        </div>
+                        <button
+                          onClick={handleToggleAutoplay}
+                          className="relative inline-flex h-4 w-7 items-center rounded-full transition-colors duration-300 cursor-pointer outline-none"
+                          style={{
+                            background: me.autoplay ? '#f59e0b' : 'rgba(255,255,255,0.1)',
+                          }}
+                        >
+                          <span
+                            className={`${
+                              me.autoplay ? 'translate-x-3.5' : 'translate-x-0.5'
+                            } inline-block h-2.5 w-2.5 transform rounded-full bg-white transition-transform duration-300`}
+                          />
+                        </button>
+                      </div>
+                    )}
+
                     {!isMyTurn && gameState && (
                       <p className="text-xs text-center mt-1" style={{ color: 'rgba(156,163,175,0.35)' }}>
                         Waiting for {gameState.players?.[currentPlayerId]?.username ?? '…'}
@@ -2816,6 +2933,38 @@ export default function GameRoom() {
                   </div>
                 );
               })}
+
+              {spectators.length > 0 && (
+                <div className="mt-4 pt-4 border-t flex flex-col gap-2" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-amber-500/70">
+                    👁️ Spectators ({spectators.length})
+                  </h3>
+                  <div className="flex flex-col gap-2 max-h-[120px] overflow-y-auto">
+                    {spectators.map(s => {
+                      const isMe = s.id === myId;
+                      return (
+                        <div
+                          key={s.id}
+                          className="flex items-center justify-between p-2 rounded-xl transition-all duration-200 border"
+                          style={{
+                            background: isMe ? 'rgba(212,175,55,0.05)' : 'rgba(255,255,255,0.02)',
+                            borderColor: isMe ? 'rgba(212,175,55,0.2)' : 'rgba(255,255,255,0.05)',
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm">👁️</span>
+                            <span className="text-xs font-bold text-gray-300 flex items-center gap-1.5">
+                              {s.username}
+                              {isMe && <span className="text-[8px] px-1 py-0.5 rounded bg-yellow-500/15 text-yellow-500 font-bold uppercase">You</span>}
+                              {s.connected === false && <span className="text-[8px] text-gray-500 font-bold">(offline)</span>}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="mt-2">
