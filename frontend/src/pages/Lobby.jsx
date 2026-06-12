@@ -339,7 +339,7 @@ export default function Lobby() {
             return;
           } catch (specErr) {
             console.error('[Lobby] Spectate error:', specErr);
-            showToast(specErr.message || 'Could not join as spectator', 'error');
+            setError(specErr.message || 'Could not join as spectator');
             return;
           }
         }

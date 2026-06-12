@@ -13,7 +13,7 @@
  *  - All actions go through doAction wrapper (loading + error handling)
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate }                    from 'react-router-dom';
 import socket                                         from '@/socket/socket';
 import socketService                                  from '@/services/socketService';
