@@ -7,11 +7,9 @@
  * Flow:
  *   1. Proposer picks target player, selects offer (properties + cash), selects request (properties + cash)
  *   2. Clicks "Propose" → emits initiate-trade via onInitiateTrade
- *   3. Target player sees incoming offer → Accept or Reject
- *   4. Proposer can cancel while pending
- *
- * Multiplayer-safe: all actions go through socket (onInitiateTrade etc).
- * gameState.activeTrade is the source of truth.
+ *   3. Target player sees incoming offer → Accept, Counter, or Reject
+ *   4. Click Counter → locks target, pre-populates reversing offer/request, click Send Counter Offer → emits counter-trade
+ *   5. Proposer can cancel while pending
  *
  * Props:
  *   gameState        — full client game state
@@ -19,6 +17,7 @@
  *   players          — enriched players map
  *   properties       — gameState.properties
  *   onInitiateTrade  — (targetId, offer, request) => void
+ *   onCounterTrade   — (offer, request) => void
  *   onAcceptTrade    — () => void
  *   onRejectTrade    — () => void
  *   onCancelTrade    — () => void
@@ -65,7 +64,7 @@ function PropChip({ tile, selected, onClick, disabled }) {
 
 export function TradeModal({
   gameState, myId, players, properties,
-  onInitiateTrade, onAcceptTrade, onRejectTrade, onCancelTrade,
+  onInitiateTrade, onCounterTrade, onAcceptTrade, onRejectTrade, onCancelTrade,
   onClose,
   activeTrade: activeTradeProp,
 }) {
@@ -92,6 +91,7 @@ export function TradeModal({
   const [requestCash,   setRequestCash]    = useState('');
   const [submitting,    setSubmitting]     = useState(false);
   const [error,         setError]          = useState('');
+  const [isCounterMode, setIsCounterMode]  = useState(false);
 
   const targetPlayer = players[targetId];
   const targetProperties = useMemo(() =>
@@ -125,6 +125,31 @@ export function TradeModal({
       onClose();
     } catch (e) {
       setError(e.message || 'Trade failed');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleCounter = async () => {
+    const finalOfferCash = Number(offerCash || 0);
+    const finalRequestCash = Number(requestCash || 0);
+    if (offerProps.size === 0 && finalOfferCash === 0 && requestProps.size === 0 && finalRequestCash === 0) {
+      setError('Counter trade must include at least one item');
+      return;
+    }
+    setSubmitting(true);
+    setError('');
+    try {
+      await onCounterTrade({
+        propertyIds: [...offerProps],
+        money:       finalOfferCash,
+      }, {
+        propertyIds: [...requestProps],
+        money:       finalRequestCash,
+      });
+      onClose();
+    } catch (e) {
+      setError(e.message || 'Counter trade failed');
     } finally {
       setSubmitting(false);
     }
@@ -203,7 +228,7 @@ export function TradeModal({
         )}
 
         {/* ── Active trade review (target player) ── */}
-        {activeTrade && isTradeTarget && (
+        {activeTrade && isTradeTarget && !isCounterMode && (
           <div style={{ padding: '16px 20px' }}>
             <TradeReview
               trade={activeTrade}
@@ -228,6 +253,15 @@ export function TradeModal({
                   setError(err.message || 'Failed to reject trade');
                   onClose();
                 }
+              }}
+              onCounter={() => {
+                // Pre-fill counter-offer states in reverse
+                setTargetId(activeTrade.fromPlayerId);
+                setOfferProps(new Set(activeTrade.request.propertyIds));
+                setOfferCash(activeTrade.request.money || '');
+                setRequestProps(new Set(activeTrade.offer.propertyIds));
+                setRequestCash(activeTrade.offer.money || '');
+                setIsCounterMode(true);
               }}
             />
           </div>
@@ -261,8 +295,8 @@ export function TradeModal({
           </div>
         )}
 
-        {/* ── Propose a new trade ── */}
-        {!activeTrade && (
+        {/* ── Propose / Counter a trade ── */}
+        {(!activeTrade || (isTradeTarget && isCounterMode)) && (
           <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
             {/* Target player selector */}
@@ -270,24 +304,36 @@ export function TradeModal({
               <div style={{ fontSize: 10, color: 'rgba(156,163,175,0.45)', letterSpacing: '0.1em', marginBottom: 6 }}>
                 TRADE WITH
               </div>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {otherPlayers.map(p => (
-                  <button
-                    key={p.id}
-                    onClick={() => { setTargetId(p.id); setRequestProps(new Set()); setRequestCash(0); }}
-                    style={{
-                      padding: '5px 12px', borderRadius: 8,
-                      background: targetId === p.id ? `${p.color}22` : 'rgba(255,255,255,0.04)',
-                      border: targetId === p.id ? `1px solid ${p.color}60` : '1px solid rgba(255,255,255,0.08)',
-                      color: targetId === p.id ? p.color : 'rgba(156,163,175,0.6)',
-                      fontWeight: 700, fontSize: 12, cursor: 'pointer',
-                      fontFamily: "'DM Sans',sans-serif",
-                    }}
-                  >
-                    {p.token} {p.username}
-                  </button>
-                ))}
-              </div>
+              {isCounterMode ? (
+                <div style={{
+                  padding: '8px 12px', borderRadius: 8,
+                  background: 'rgba(255, 255, 255, 0.04)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  color: '#fbbf24',
+                  fontWeight: 700, fontSize: 12,
+                }}>
+                  {players[activeTrade.fromPlayerId]?.token} {players[activeTrade.fromPlayerId]?.username} (Counter-Offer Target)
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {otherPlayers.map(p => (
+                    <button
+                      key={p.id}
+                      onClick={() => { setTargetId(p.id); setRequestProps(new Set()); setRequestCash(0); }}
+                      style={{
+                        padding: '5px 12px', borderRadius: 8,
+                        background: targetId === p.id ? `${p.color}22` : 'rgba(255,255,255,0.04)',
+                        border: targetId === p.id ? `1px solid ${p.color}60` : '1px solid rgba(255,255,255,0.08)',
+                        color: targetId === p.id ? p.color : 'rgba(156,163,175,0.6)',
+                        fontWeight: 700, fontSize: 12, cursor: 'pointer',
+                        fontFamily: "'DM Sans',sans-serif",
+                      }}
+                    >
+                      {p.token} {p.username}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Two-column: You offer / You request */}
@@ -401,10 +447,8 @@ export function TradeModal({
               </div>
             </div>
 
-            {/* Error was moved below header so it is visible in all states */}
-
             <button
-              onClick={handlePropose}
+              onClick={isCounterMode ? handleCounter : handlePropose}
               disabled={submitting || !targetId}
               style={{
                 width: '100%', padding: '12px', borderRadius: 10,
@@ -416,8 +460,22 @@ export function TradeModal({
                 opacity: !targetId ? 0.5 : 1,
               }}
             >
-              {submitting ? 'Proposing…' : '🤝 Propose Trade'}
+              {submitting ? 'Submitting…' : isCounterMode ? '🤝 Send Counter Offer' : '🤝 Propose Trade'}
             </button>
+
+            {isCounterMode && (
+              <button
+                onClick={() => setIsCounterMode(false)}
+                style={{
+                  width: '100%', padding: '10px', borderRadius: 10,
+                  background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
+                  color: 'rgba(156,163,175,0.8)', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+                  fontFamily: "'DM Sans',sans-serif",
+                }}
+              >
+                ⬅️ Back to Review
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -426,7 +484,7 @@ export function TradeModal({
 }
 
 // ── Trade review component (shown to trade target) ────────────────────────────
-function TradeReview({ trade, players, properties, onAccept, onReject }) {
+function TradeReview({ trade, players, properties, onAccept, onReject, onCounter }) {
   const from = players[trade.fromPlayerId];
   const to   = players[trade.toPlayerId];
 
@@ -444,21 +502,29 @@ function TradeReview({ trade, players, properties, onAccept, onReject }) {
         <TradeColumn label="They request" tiles={getProps(trade.request.propertyIds)} cash={trade.request.money} color="#f87171" />
       </div>
 
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 6 }}>
         <button
           onClick={onAccept}
           style={{
             flex: 1, padding: '10px', borderRadius: 8,
             background: 'linear-gradient(135deg,#166534,#22c55e)',
-            border: 'none', color: '#fff', fontWeight: 800, fontSize: 12, cursor: 'pointer',
+            border: 'none', color: '#fff', fontWeight: 800, fontSize: 11, cursor: 'pointer',
           }}
         >✓ Accept</button>
+        <button
+          onClick={onCounter}
+          style={{
+            flex: 1, padding: '10px', borderRadius: 8,
+            background: 'linear-gradient(135deg,#9a3412,#ea580c)',
+            border: 'none', color: '#fff', fontWeight: 800, fontSize: 11, cursor: 'pointer',
+          }}
+        >⚡ Counter</button>
         <button
           onClick={onReject}
           style={{
             flex: 1, padding: '10px', borderRadius: 8,
             background: 'rgba(239,68,68,0.12)',
-            border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', fontWeight: 800, fontSize: 12, cursor: 'pointer',
+            border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', fontWeight: 800, fontSize: 11, cursor: 'pointer',
           }}
         >✕ Reject</button>
       </div>

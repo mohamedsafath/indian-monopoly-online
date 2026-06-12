@@ -1,1 +1,22 @@
-[]
+[
+  {
+    "playerId": "google_achiever_1781267166738_gmail_com_7069",
+    "username": "Badge Collector",
+    "email": "achiever_1781267166738@gmail.com",
+    "avatar": "https://api.dicebear.com/7.x/adventurer/svg?seed=Badge%20Collector",
+    "level": 2,
+    "wins": 5,
+    "games": 8,
+    "losses": 3,
+    "loansTaken": 11,
+    "propertiesPurchased": 25,
+    "totalNetWorthEarned": 450000,
+    "propertiesMortgaged": 2,
+    "propertiesRepossessed": 0,
+    "auctionsWon": 8,
+    "rentPaid": 15000,
+    "rentEarned": 35000,
+    "bankruptcies": 1,
+    "hotelsBuilt": 6
+  }
+]

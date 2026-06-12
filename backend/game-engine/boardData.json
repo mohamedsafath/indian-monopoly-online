@@ -1,0 +1,792 @@
+{
+  "TILE_TYPES": {
+    "GO": "go",
+    "PROPERTY": "property",
+    "RAILWAY": "railway",
+    "UTILITY": "utility",
+    "TAX": "tax",
+    "CHANCE": "chance",
+    "COMMUNITY": "community",
+    "JAIL": "jail",
+    "FREE_PARKING": "free_parking",
+    "GO_TO_JAIL": "go_to_jail"
+  },
+  "GROUPS": {
+    "BROWN": "brown",
+    "LIGHT_BLUE": "light_blue",
+    "PINK": "pink",
+    "ORANGE": "orange",
+    "RED": "red",
+    "YELLOW": "yellow",
+    "GREEN": "green",
+    "DARK_BLUE": "dark_blue"
+  },
+  "COLOR_GROUP_META": {
+    "brown": {
+      "hex": "#8B4513",
+      "label": "Brown",
+      "size": 2
+    },
+    "light_blue": {
+      "hex": "#87CEEB",
+      "label": "Light Blue",
+      "size": 3
+    },
+    "pink": {
+      "hex": "#FF69B4",
+      "label": "Pink",
+      "size": 3
+    },
+    "orange": {
+      "hex": "#FF8C00",
+      "label": "Orange",
+      "size": 3
+    },
+    "red": {
+      "hex": "#DC143C",
+      "label": "Red",
+      "size": 3
+    },
+    "yellow": {
+      "hex": "#FFD700",
+      "label": "Yellow",
+      "size": 3
+    },
+    "green": {
+      "hex": "#228B22",
+      "label": "Green",
+      "size": 3
+    },
+    "dark_blue": {
+      "hex": "#00008B",
+      "label": "Dark Blue",
+      "size": 2
+    }
+  },
+  "BOARD_TILES": [
+    {
+      "id": 0,
+      "position": 0,
+      "name": "Start Journey 🇮🇳",
+      "subtitle": "Collect ₹2,000 Salary",
+      "type": "go",
+      "goReward": 2000,
+      "description": "Each time you pass or land here, collect ₹2,000 salary from the bank.",
+      "icon": "🇮🇳"
+    },
+    {
+      "id": 1,
+      "position": 1,
+      "name": "Patna",
+      "subtitle": "Capital of Bihar",
+      "type": "property",
+      "group": "brown",
+      "groupSize": 2,
+      "icon": "🏙️",
+      "price": 1000,
+      "rent": [
+        30,
+        170,
+        500,
+        1500,
+        2670,
+        4170
+      ],
+      "houseCost": 800,
+      "mortgage": 500,
+      "unmortgage": 550,
+      "description": "An affordable entry into the property market."
+    },
+    {
+      "id": 2,
+      "position": 2,
+      "name": "Community Chest",
+      "subtitle": "Draw a card",
+      "type": "community",
+      "icon": "📦",
+      "description": "Draw the top Community Chest card and follow its instructions."
+    },
+    {
+      "id": 3,
+      "position": 3,
+      "name": "Ranchi",
+      "subtitle": "Capital of Jharkhand",
+      "type": "property",
+      "group": "brown",
+      "groupSize": 2,
+      "icon": "🌿",
+      "price": 1500,
+      "rent": [
+        80,
+        380,
+        1130,
+        3380,
+        6000,
+        8440
+      ],
+      "houseCost": 900,
+      "mortgage": 750,
+      "unmortgage": 825,
+      "description": "Second brown property — owning both browns doubles base rent."
+    },
+    {
+      "id": 4,
+      "position": 4,
+      "name": "Income Tax",
+      "subtitle": "Pay ₹2,000",
+      "type": "tax",
+      "icon": "📋",
+      "amount": 2000,
+      "description": "Pay ₹2,000 Income Tax to the government."
+    },
+    {
+      "id": 5,
+      "position": 5,
+      "name": "Indian Railways North 🚂",
+      "subtitle": "Northern Division",
+      "type": "railway",
+      "icon": "🚂",
+      "price": 3000,
+      "rent": [
+        380,
+        750,
+        1500,
+        3000
+      ],
+      "mortgage": 1500,
+      "unmortgage": 1650,
+      "description": "Railways pay escalating rent based on how many stations the owner controls."
+    },
+    {
+      "id": 6,
+      "position": 6,
+      "name": "Chandigarh",
+      "subtitle": "The City Beautiful",
+      "type": "property",
+      "group": "light_blue",
+      "groupSize": 3,
+      "icon": "🌸",
+      "price": 2000,
+      "rent": [
+        120,
+        600,
+        1800,
+        5400,
+        8000,
+        11000
+      ],
+      "houseCost": 1000,
+      "mortgage": 1000,
+      "unmortgage": 1100,
+      "description": "India's first planned city — modern, clean, and a solid early purchase."
+    },
+    {
+      "id": 7,
+      "position": 7,
+      "name": "Chance",
+      "subtitle": "Draw a card",
+      "type": "chance",
+      "icon": "❓",
+      "description": "Draw the top Chance card and follow its instructions."
+    },
+    {
+      "id": 8,
+      "position": 8,
+      "name": "Indore",
+      "subtitle": "Cleanest City of India",
+      "type": "property",
+      "group": "light_blue",
+      "groupSize": 3,
+      "icon": "🏅",
+      "price": 2500,
+      "rent": [
+        150,
+        750,
+        2250,
+        6750,
+        10000,
+        13750
+      ],
+      "houseCost": 1300,
+      "mortgage": 1250,
+      "unmortgage": 1375,
+      "description": "Indore has won India's cleanest city award 7 times."
+    },
+    {
+      "id": 9,
+      "position": 9,
+      "name": "Lucknow",
+      "subtitle": "City of Nawabs",
+      "type": "property",
+      "group": "light_blue",
+      "groupSize": 3,
+      "icon": "🕌",
+      "price": 3000,
+      "rent": [
+        200,
+        1000,
+        2500,
+        7500,
+        11250,
+        15000
+      ],
+      "houseCost": 1300,
+      "mortgage": 1500,
+      "unmortgage": 1650,
+      "description": "The city of Tehzeeb — most expensive Light Blue."
+    },
+    {
+      "id": 10,
+      "position": 10,
+      "name": "Tihar Jail 🔒",
+      "subtitle": "Just Visiting / In Jail",
+      "type": "jail",
+      "icon": "🔒",
+      "jailFine": 500,
+      "jailTile": 10,
+      "description": "Just visiting: no effect. In Jail: roll doubles, use card, or pay ₹500."
+    },
+    {
+      "id": 11,
+      "position": 11,
+      "name": "Ahmedabad",
+      "subtitle": "Manchester of India",
+      "type": "property",
+      "group": "pink",
+      "groupSize": 3,
+      "icon": "🏭",
+      "price": 3000,
+      "rent": [
+        210,
+        1070,
+        3210,
+        9640,
+        13390,
+        16070
+      ],
+      "houseCost": 2100,
+      "mortgage": 1500,
+      "unmortgage": 1650,
+      "description": "India's textile hub and a major commercial centre."
+    },
+    {
+      "id": 12,
+      "position": 12,
+      "name": "Electricity Board ⚡",
+      "subtitle": "National Power Grid",
+      "type": "utility",
+      "icon": "⚡",
+      "price": 2500,
+      "rent": [
+        10,
+        20
+      ],
+      "mortgage": 1250,
+      "unmortgage": 1375,
+      "description": "Rent = dice total × 4 (one utility) or × 10 (both utilities)."
+    },
+    {
+      "id": 13,
+      "position": 13,
+      "name": "Pune",
+      "subtitle": "Oxford of the East",
+      "type": "property",
+      "group": "pink",
+      "groupSize": 3,
+      "icon": "🎓",
+      "price": 3800,
+      "rent": [
+        270,
+        1360,
+        4070,
+        12210,
+        16960,
+        20360
+      ],
+      "houseCost": 2700,
+      "mortgage": 1900,
+      "unmortgage": 2090,
+      "description": "A thriving IT and education hub."
+    },
+    {
+      "id": 14,
+      "position": 14,
+      "name": "Kochi",
+      "subtitle": "Queen of the Arabian Sea",
+      "type": "property",
+      "group": "pink",
+      "groupSize": 3,
+      "icon": "⛵",
+      "price": 4500,
+      "rent": [
+        340,
+        1690,
+        5060,
+        14060,
+        19690,
+        25310
+      ],
+      "houseCost": 2800,
+      "mortgage": 2250,
+      "unmortgage": 2475,
+      "description": "The historic port city — most expensive Pink."
+    },
+    {
+      "id": 15,
+      "position": 15,
+      "name": "Indian Railways South 🚂",
+      "subtitle": "Southern Division",
+      "type": "railway",
+      "icon": "🚂",
+      "price": 3600,
+      "rent": [
+        450,
+        900,
+        1800,
+        3600
+      ],
+      "mortgage": 1800,
+      "unmortgage": 1980,
+      "description": "Second railway station — owning two railways doubles rent to ₹500."
+    },
+    {
+      "id": 16,
+      "position": 16,
+      "name": "Chennai",
+      "subtitle": "Detroit of India",
+      "type": "property",
+      "group": "orange",
+      "groupSize": 3,
+      "icon": "🚗",
+      "price": 5000,
+      "rent": [
+        390,
+        1940,
+        5560,
+        15280,
+        20830,
+        26390
+      ],
+      "houseCost": 2800,
+      "mortgage": 2500,
+      "unmortgage": 2750,
+      "description": "India's automobile capital — Orange group is a powerful mid-game target."
+    },
+    {
+      "id": 17,
+      "position": 17,
+      "name": "Community Chest",
+      "subtitle": "Draw a card",
+      "type": "community",
+      "icon": "📦",
+      "description": "Draw the top Community Chest card and follow its instructions."
+    },
+    {
+      "id": 18,
+      "position": 18,
+      "name": "Hyderabad",
+      "subtitle": "City of Pearls",
+      "type": "property",
+      "group": "orange",
+      "groupSize": 3,
+      "icon": "💎",
+      "price": 6000,
+      "rent": [
+        470,
+        2330,
+        6670,
+        18330,
+        25000,
+        31670
+      ],
+      "houseCost": 3300,
+      "mortgage": 3000,
+      "unmortgage": 3300,
+      "description": "HITEC City makes Hyderabad a tech powerhouse."
+    },
+    {
+      "id": 19,
+      "position": 19,
+      "name": "Kolkata",
+      "subtitle": "City of Joy",
+      "type": "property",
+      "group": "orange",
+      "groupSize": 3,
+      "icon": "🎭",
+      "price": 7000,
+      "rent": [
+        560,
+        2800,
+        7700,
+        21000,
+        28000,
+        35000
+      ],
+      "houseCost": 3500,
+      "mortgage": 3500,
+      "unmortgage": 3850,
+      "description": "The cultural capital — most expensive Orange."
+    },
+    {
+      "id": 20,
+      "position": 20,
+      "name": "Tea Break ☕",
+      "subtitle": "Free Parking",
+      "type": "free_parking",
+      "icon": "☕",
+      "description": "Rest and collect all taxes/fees accumulated in the pot."
+    },
+    {
+      "id": 21,
+      "position": 21,
+      "name": "Bengaluru",
+      "subtitle": "Silicon Valley of India",
+      "type": "property",
+      "group": "red",
+      "groupSize": 3,
+      "icon": "💻",
+      "price": 7000,
+      "rent": [
+        570,
+        2860,
+        7950,
+        22270,
+        27840,
+        33410
+      ],
+      "houseCost": 4800,
+      "mortgage": 3500,
+      "unmortgage": 3850,
+      "description": "India's IT capital — Red group has high house costs but exceptional hotel returns."
+    },
+    {
+      "id": 22,
+      "position": 22,
+      "name": "Chance",
+      "subtitle": "Draw a card",
+      "type": "chance",
+      "icon": "❓",
+      "description": "Draw the top Chance card and follow its instructions."
+    },
+    {
+      "id": 23,
+      "position": 23,
+      "name": "Delhi",
+      "subtitle": "Capital of India",
+      "type": "property",
+      "group": "red",
+      "groupSize": 3,
+      "icon": "🏛️",
+      "price": 7500,
+      "rent": [
+        610,
+        3070,
+        8520,
+        23860,
+        29830,
+        35800
+      ],
+      "houseCost": 5100,
+      "mortgage": 3750,
+      "unmortgage": 4125,
+      "description": "The seat of power."
+    },
+    {
+      "id": 24,
+      "position": 24,
+      "name": "Mumbai",
+      "subtitle": "Financial Capital of India",
+      "type": "property",
+      "group": "red",
+      "groupSize": 3,
+      "icon": "💰",
+      "price": 8000,
+      "rent": [
+        670,
+        3330,
+        10000,
+        25000,
+        30830,
+        36670
+      ],
+      "houseCost": 5000,
+      "mortgage": 4000,
+      "unmortgage": 4400,
+      "description": "Bollywood + Dalal Street = the most valuable Red property."
+    },
+    {
+      "id": 25,
+      "position": 25,
+      "name": "Indian Railways East 🚂",
+      "subtitle": "Eastern Division",
+      "type": "railway",
+      "icon": "🚂",
+      "price": 4200,
+      "rent": [
+        530,
+        1050,
+        2100,
+        4200
+      ],
+      "mortgage": 2100,
+      "unmortgage": 2310,
+      "description": "Third railway — with three stations the owner collects ₹1,000 per visit."
+    },
+    {
+      "id": 26,
+      "position": 26,
+      "name": "Jaipur",
+      "subtitle": "Pink City of India",
+      "type": "property",
+      "group": "yellow",
+      "groupSize": 3,
+      "icon": "🏰",
+      "price": 5000,
+      "rent": [
+        420,
+        2120,
+        6350,
+        15380,
+        18750,
+        22120
+      ],
+      "houseCost": 2900,
+      "mortgage": 2500,
+      "unmortgage": 2750,
+      "description": "The royal Pink City — Yellow is the penultimate power group."
+    },
+    {
+      "id": 27,
+      "position": 27,
+      "name": "Goa",
+      "subtitle": "Beach Paradise of India",
+      "type": "property",
+      "group": "yellow",
+      "groupSize": 3,
+      "icon": "🌊",
+      "price": 5500,
+      "rent": [
+        470,
+        2330,
+        6980,
+        16920,
+        20630,
+        24330
+      ],
+      "houseCost": 3200,
+      "mortgage": 2750,
+      "unmortgage": 3025,
+      "description": "Sun, sand, and strong returns."
+    },
+    {
+      "id": 28,
+      "position": 28,
+      "name": "Water Board 💧",
+      "subtitle": "National Water Authority",
+      "type": "utility",
+      "icon": "💧",
+      "price": 3000,
+      "rent": [
+        10,
+        20
+      ],
+      "mortgage": 1500,
+      "unmortgage": 1650,
+      "description": "Second utility — owning both means rent = dice × 10."
+    },
+    {
+      "id": 29,
+      "position": 29,
+      "name": "Shimla",
+      "subtitle": "Queen of Hills",
+      "type": "property",
+      "group": "yellow",
+      "groupSize": 3,
+      "icon": "🏔️",
+      "price": 6000,
+      "rent": [
+        510,
+        2570,
+        7710,
+        18210,
+        21960,
+        25710
+      ],
+      "houseCost": 3200,
+      "mortgage": 3000,
+      "unmortgage": 3300,
+      "description": "The Himalayan hill station — most expensive Yellow."
+    },
+    {
+      "id": 30,
+      "position": 30,
+      "name": "Income Tax Raid 🚔",
+      "subtitle": "Go Directly to Tihar Jail",
+      "type": "go_to_jail",
+      "icon": "🚔",
+      "jailDestination": 10,
+      "description": "Caught! Move directly to Tihar Jail. Do not pass Start Journey. Do not collect ₹2,000."
+    },
+    {
+      "id": 31,
+      "position": 31,
+      "name": "Munnar",
+      "subtitle": "Tea Gardens of Kerala",
+      "type": "property",
+      "group": "green",
+      "groupSize": 3,
+      "icon": "🍃",
+      "price": 7000,
+      "rent": [
+        610,
+        3030,
+        9100,
+        21000,
+        25670,
+        29750
+      ],
+      "houseCost": 4700,
+      "mortgage": 3500,
+      "unmortgage": 3850,
+      "description": "The emerald hills of Kerala — Green group requires heavy investment."
+    },
+    {
+      "id": 32,
+      "position": 32,
+      "name": "Srinagar",
+      "subtitle": "Paradise on Earth",
+      "type": "property",
+      "group": "green",
+      "groupSize": 3,
+      "icon": "🏞️",
+      "price": 7500,
+      "rent": [
+        650,
+        3250,
+        9750,
+        22500,
+        27500,
+        31880
+      ],
+      "houseCost": 5000,
+      "mortgage": 3750,
+      "unmortgage": 4125,
+      "description": "Heaven on Earth — shares Munnar's cost."
+    },
+    {
+      "id": 33,
+      "position": 33,
+      "name": "Community Chest",
+      "subtitle": "Draw a card",
+      "type": "community",
+      "icon": "📦",
+      "description": "Draw the top Community Chest card and follow its instructions."
+    },
+    {
+      "id": 34,
+      "position": 34,
+      "name": "Andaman & Nicobar 🏝️",
+      "subtitle": "Emerald Islands of India",
+      "type": "property",
+      "group": "green",
+      "groupSize": 3,
+      "icon": "🏝️",
+      "price": 8000,
+      "rent": [
+        700,
+        3750,
+        11250,
+        25000,
+        30000,
+        35000
+      ],
+      "houseCost": 5000,
+      "mortgage": 4000,
+      "unmortgage": 4400,
+      "description": "Remote island paradise — the most expensive Green."
+    },
+    {
+      "id": 35,
+      "position": 35,
+      "name": "Indian Railways West 🚂",
+      "subtitle": "Western Division",
+      "type": "railway",
+      "icon": "🚂",
+      "price": 5000,
+      "rent": [
+        630,
+        1250,
+        2500,
+        5000
+      ],
+      "mortgage": 2500,
+      "unmortgage": 2750,
+      "description": "Fourth and final railway — all four stations unlocks maximum ₹2,000 rent."
+    },
+    {
+      "id": 36,
+      "position": 36,
+      "name": "Chance",
+      "subtitle": "Draw a card",
+      "type": "chance",
+      "icon": "❓",
+      "description": "Draw the top Chance card and follow its instructions."
+    },
+    {
+      "id": 37,
+      "position": 37,
+      "name": "Bengaluru Tech Park 💻",
+      "subtitle": "India's IT Hub",
+      "type": "property",
+      "group": "dark_blue",
+      "groupSize": 2,
+      "icon": "🖥️",
+      "price": 8000,
+      "rent": [
+        800,
+        4000,
+        11430,
+        25140,
+        29710,
+        34290
+      ],
+      "houseCost": 4600,
+      "mortgage": 4000,
+      "unmortgage": 4400,
+      "description": "The jewel of India's tech economy."
+    },
+    {
+      "id": 38,
+      "position": 38,
+      "name": "GST Payment 💸",
+      "subtitle": "Goods & Services Tax",
+      "type": "tax",
+      "icon": "💸",
+      "amount": 750,
+      "description": "Pay ₹750 GST to the government."
+    },
+    {
+      "id": 39,
+      "position": 39,
+      "name": "Mumbai Marine Drive 🌊",
+      "subtitle": "Queen's Necklace",
+      "type": "property",
+      "group": "dark_blue",
+      "groupSize": 2,
+      "icon": "🌃",
+      "price": 9000,
+      "rent": [
+        1130,
+        4500,
+        13500,
+        31500,
+        38250,
+        45000
+      ],
+      "houseCost": 4500,
+      "mortgage": 4500,
+      "unmortgage": 4950,
+      "description": "The most expensive property on the board. Hotel rent: ₹20,000."
+    }
+  ]
+}

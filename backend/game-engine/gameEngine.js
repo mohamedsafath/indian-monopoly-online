@@ -2013,6 +2013,92 @@ const cancelTrade = (gameState, playerId) => {
   return ok(events);
 };
 
+/**
+ * counterTrade — The trade recipient proposes a counter-offer.
+ * Swaps fromPlayerId and toPlayerId, updates the offer/request details, and keeps the trade active under 'pending' status.
+ *
+ * @param {Object} gameState
+ * @param {string} playerId   — player who is countering (must be the toPlayerId of active trade)
+ * @param {{ money: number, propertyIds: number[] }} offer    — new offer from the countering player
+ * @param {{ money: number, propertyIds: number[] }} request  — new request from the countering player
+ * @returns {{ ok, events, error? }}
+ */
+const counterTrade = (gameState, playerId, offer, request) => {
+  if (gameState.status !== 'playing') return fail('Game not active');
+
+  const trade = gameState.activeTrade;
+  if (!trade)                       return fail('No trade in progress');
+  if (trade.toPlayerId !== playerId) return fail('You are not the trade recipient');
+  if (trade.status !== 'pending')    return fail('Trade is no longer pending');
+
+  const fromPlayer = gameState.players[trade.fromPlayerId]; // original proposer, new target
+  const toPlayer   = gameState.players[trade.toPlayerId];   // original target, new proposer (playerId)
+
+  if (!offer || !request) {
+    return fail('Invalid counter-trade payload');
+  }
+
+  const offerMoney = offer.money ?? 0;
+  const requestMoney = request.money ?? 0;
+
+  if (typeof offerMoney !== 'number' || !Number.isFinite(offerMoney) || offerMoney < 0) {
+    return fail('Offer money must be a valid non-negative number');
+  }
+  if (typeof requestMoney !== 'number' || !Number.isFinite(requestMoney) || requestMoney < 0) {
+    return fail('Request money must be a valid non-negative number');
+  }
+
+  // Validate new offer money (offered by the countering player)
+  if (offerMoney > toPlayer.money) {
+    return fail('You cannot offer more money than you have');
+  }
+  // Validate new offer properties (owned by the countering player)
+  for (const tileId of (offer.propertyIds ?? [])) {
+    if (gameState.properties[tileId]?.ownerId !== playerId) {
+      return fail(`You do not own property at tile ${tileId}`);
+    }
+  }
+  // Validate new request money (requested from the original proposer)
+  if (requestMoney > fromPlayer.money) {
+    return fail('Target player does not have that much money');
+  }
+  // Validate new request properties (owned by the original proposer)
+  for (const tileId of (request.propertyIds ?? [])) {
+    if (gameState.properties[tileId]?.ownerId !== trade.fromPlayerId) {
+      return fail(`Target player does not own property at tile ${tileId}`);
+    }
+  }
+
+  // Validate buildings in color groups
+  const allIds = [...(offer.propertyIds || []), ...(request.propertyIds || [])];
+  for (const tileId of allIds) {
+    const groupTiles = getColorGroupTiles(tileId);
+    const groupHasBuildings = groupTiles.some(
+      (id) => gameState.properties[id]?.houses > 0 || gameState.properties[id]?.hotel
+    );
+    if (groupHasBuildings) {
+      return fail('Cannot trade properties in a color group that contains houses or hotels');
+    }
+  }
+
+  // Update trade state
+  trade.fromPlayerId = playerId;            // Counters is now the proposer
+  trade.toPlayerId = fromPlayer.id;          // Original proposer is now target
+  trade.offer = { money: offerMoney, propertyIds: offer.propertyIds ?? [] };
+  trade.request = { money: requestMoney, propertyIds: request.propertyIds ?? [] };
+  trade.initiatedAt = Date.now();
+
+  const events = [evt(
+    EVENT_TYPES.TRADE_COUNTERED,
+    { tradeId: trade.tradeId, fromPlayerId: trade.fromPlayerId, toPlayerId: trade.toPlayerId, offer: trade.offer, request: trade.request },
+    `🤝 ${toPlayer.username} countered the trade offer from ${fromPlayer.username}`,
+  )];
+
+  _appendLog(gameState, events);
+  return ok(events);
+};
+
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ── AUCTION SYSTEM ────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2914,6 +3000,7 @@ module.exports = {
 
   // Trading
   initiateTrade,
+  counterTrade,
   acceptTrade,
   rejectTrade,
   cancelTrade,

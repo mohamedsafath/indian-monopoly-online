@@ -62,6 +62,7 @@ const {
 
   // Trade
   initiateTrade,
+  counterTrade,
   acceptTrade,
   rejectTrade,
   cancelTrade,
@@ -896,8 +897,11 @@ const executeBotTurn = async (io, room, botId) => {
   const player = gameState.players[botId];
   if (!player || player.isBankrupt) return;
 
+  const currentTile = TILE_BY_ID[player.position] || { name: 'Start/Unknown' };
+
   // 1. Debt raising check
   if (player.money < 0) {
+    console.log(`\n🤖 [BOT]\nName: ${player.username}\nMoney: ₹${player.money}\nTile: ${currentTile.name}\nDecision: Raise Cash\n`);
     raiseBotCash(io, room, botId);
     return;
   }
@@ -907,17 +911,17 @@ const executeBotTurn = async (io, room, botId) => {
     if (!gameState.hasRolled) {
       // Escape jail heuristics
       if (player.jailCard) {
-        console.log(`🤖 Bot ${player.username} using jail card`);
+        console.log(`\n🤖 [BOT]\nName: ${player.username}\nMoney: ₹${player.money}\nTile: ${currentTile.name}\nDecision: Escape Jail (Jail Card)\n`);
         _dispatch(io, null, room, botId, useJailCard, []);
       } else if (player.money >= 1000) {
-        console.log(`🤖 Bot ${player.username} paying jail fine`);
+        console.log(`\n🤖 [BOT]\nName: ${player.username}\nMoney: ₹${player.money}\nTile: ${currentTile.name}\nDecision: Escape Jail (Pay Fine)\n`);
         _dispatch(io, null, room, botId, payJailFine, []);
       } else {
-        console.log(`🤖 Bot ${player.username} rolling to escape jail`);
+        console.log(`\n🤖 [BOT]\nName: ${player.username}\nMoney: ₹${player.money}\nTile: ${currentTile.name}\nDecision: Escape Jail (Roll Dice)\n`);
         _dispatch(io, null, room, botId, rollDice, []);
       }
     } else {
-      console.log(`🤖 Bot ${player.username} ending turn (still in jail)`);
+      console.log(`\n🤖 [BOT]\nName: ${player.username}\nMoney: ₹${player.money}\nTile: ${currentTile.name}\nDecision: End Turn (Still in Jail)\n`);
       _dispatch(io, null, room, botId, endTurn, []);
     }
     return;
@@ -925,29 +929,37 @@ const executeBotTurn = async (io, room, botId) => {
 
   // 3. Normal turn execution
   if (!gameState.hasRolled) {
-    console.log(`🤖 Bot ${player.username} rolling dice`);
+    console.log(`\n🤖 [BOT]\nName: ${player.username}\nMoney: ₹${player.money}\nTile: ${currentTile.name}\nDecision: Roll Dice\n`);
     _dispatch(io, null, room, botId, rollDice, []);
   } else {
     // Already rolled
     if (gameState.pendingAction === 'buy_decision') {
       const tile = TILE_BY_ID[player.position];
       if (tile && player.money >= tile.price) {
-        console.log(`🤖 Bot ${player.username} buying property ${tile.name}`);
+        console.log(`\n🤖 [BOT]\nName: ${player.username}\nMoney: ₹${player.money}\nTile: ${currentTile.name}\nDecision: Buy Property (${tile.name})\n`);
         _dispatch(io, null, room, botId, buyProperty, []);
       } else {
-        console.log(`🤖 Bot ${player.username} declining property ${tile.name} and ending turn`);
+        console.log(`\n🤖 [BOT]\nName: ${player.username}\nMoney: ₹${player.money}\nTile: ${currentTile.name}\nDecision: Decline Property & End Turn\n`);
         _dispatch(io, null, room, botId, endTurn, []);
       }
     } else if (gameState.pendingAction === null) {
       const upgraded = upgradeBotProperties(io, room, botId);
-      if (upgraded) return;
+      if (upgraded) {
+        console.log(`\n🤖 [BOT]\nName: ${player.username}\nMoney: ₹${player.money}\nTile: ${currentTile.name}\nDecision: Build/Upgrade Property\n`);
+        return;
+      }
 
       // Proactive trade check
       const tradeProposed = proposeBotTradeProactive(io, room, botId);
-      if (tradeProposed) return;
+      if (tradeProposed) {
+        console.log(`\n🤖 [BOT]\nName: ${player.username}\nMoney: ₹${player.money}\nTile: ${currentTile.name}\nDecision: Propose Trade\n`);
+        return;
+      }
 
-      console.log(`🤖 Bot ${player.username} ending turn`);
+      console.log(`\n🤖 [BOT]\nName: ${player.username}\nMoney: ₹${player.money}\nTile: ${currentTile.name}\nDecision: End Turn\n`);
       _dispatch(io, null, room, botId, endTurn, []);
+    } else {
+      console.log(`\n🤖 [BOT]\nName: ${player.username}\nMoney: ₹${player.money}\nTile: ${currentTile.name}\nDecision: Unhandled state (Pending Action: ${gameState.pendingAction}). Watchdog will handle if stuck.\n`);
     }
   }
 };
@@ -966,6 +978,35 @@ const triggerBotCycle = (io, room) => {
     );
 
     if (botToAct) {
+      // 0.1 Watchdog for End Game Vote
+      if (!room.botEndGameVoteStartAt || room.botEndGameVoteActivePlayerId !== botToAct.id) {
+        room.botEndGameVoteStartAt = Date.now();
+        room.botEndGameVoteActivePlayerId = botToAct.id;
+        room.botEndGameVoteAttempts = 0;
+      }
+      room.botEndGameVoteAttempts = (room.botEndGameVoteAttempts || 0) + 1;
+
+      if (Date.now() - room.botEndGameVoteStartAt > 5000 || room.botEndGameVoteAttempts > 5) {
+        console.error(`🚨 [Bot Watchdog] Bot/Autoplay player ${botToAct.username} end-game vote exceeded limit! Forcing YES vote.`);
+        
+        try {
+          const result = voteEndGame(room.gameState, botToAct.id, true);
+          if (result.ok) {
+            broadcastEvents(io, room, result.events);
+            broadcastGameState(io, room);
+          }
+        } catch (e) {
+          console.error('[Bot Watchdog End Game Vote Recovery Error]', e);
+        }
+        
+        room.botEndGameVoteStartAt = null;
+        room.botEndGameVoteActivePlayerId = null;
+        room.botEndGameVoteAttempts = 0;
+        room.botExecutingAction = false;
+        triggerBotCycle(io, room);
+        return;
+      }
+
       room.botExecutingAction = true;
       setTimeout(async () => {
         try {
@@ -973,8 +1014,16 @@ const triggerBotCycle = (io, room) => {
           _dispatch(io, null, room, botToAct.id, voteEndGame, [true]);
         } catch (err) {
           console.error('[Bot End Game Vote Error]', err);
+          try {
+            voteEndGame(room.gameState, botToAct.id, true);
+          } catch (recoveryErr) {
+            console.error('[Bot End Game Vote Recovery Error]', recoveryErr);
+          }
         } finally {
           room.botExecutingAction = false;
+          room.botEndGameVoteStartAt = null;
+          room.botEndGameVoteActivePlayerId = null;
+          room.botEndGameVoteAttempts = 0;
           triggerBotCycle(io, room);
         }
       }, 1500);
@@ -993,6 +1042,35 @@ const triggerBotCycle = (io, room) => {
     );
 
     if (botToAct) {
+      // 0.2 Watchdog for Kick Host Vote
+      if (!room.botKickHostVoteStartAt || room.botKickHostVoteActivePlayerId !== botToAct.id) {
+        room.botKickHostVoteStartAt = Date.now();
+        room.botKickHostVoteActivePlayerId = botToAct.id;
+        room.botKickHostVoteAttempts = 0;
+      }
+      room.botKickHostVoteAttempts = (room.botKickHostVoteAttempts || 0) + 1;
+
+      if (Date.now() - room.botKickHostVoteStartAt > 5000 || room.botKickHostVoteAttempts > 5) {
+        console.error(`🚨 [Bot Watchdog] Bot/Autoplay player ${botToAct.username} kick-host vote exceeded limit! Forcing YES vote.`);
+        
+        try {
+          const result = voteKickHost(room.gameState, botToAct.id, true);
+          if (result.ok) {
+            broadcastEvents(io, room, result.events);
+            broadcastGameState(io, room);
+          }
+        } catch (e) {
+          console.error('[Bot Watchdog Kick Host Vote Recovery Error]', e);
+        }
+        
+        room.botKickHostVoteStartAt = null;
+        room.botKickHostVoteActivePlayerId = null;
+        room.botKickHostVoteAttempts = 0;
+        room.botExecutingAction = false;
+        triggerBotCycle(io, room);
+        return;
+      }
+
       room.botExecutingAction = true;
       setTimeout(async () => {
         try {
@@ -1000,8 +1078,16 @@ const triggerBotCycle = (io, room) => {
           _dispatch(io, null, room, botToAct.id, voteKickHost, [true]);
         } catch (err) {
           console.error('[Bot Kick Host Vote Error]', err);
+          try {
+            voteKickHost(room.gameState, botToAct.id, true);
+          } catch (recoveryErr) {
+            console.error('[Bot Kick Host Vote Recovery Error]', recoveryErr);
+          }
         } finally {
           room.botExecutingAction = false;
+          room.botKickHostVoteStartAt = null;
+          room.botKickHostVoteActivePlayerId = null;
+          room.botKickHostVoteAttempts = 0;
           triggerBotCycle(io, room);
         }
       }, 1500);
@@ -1020,14 +1106,51 @@ const triggerBotCycle = (io, room) => {
     );
 
     if (botToAct) {
+      // 1.1 Watchdog for Auction
+      if (!room.botAuctionStartAt || room.botAuctionActivePlayerId !== botToAct.id) {
+        room.botAuctionStartAt = Date.now();
+        room.botAuctionActivePlayerId = botToAct.id;
+        room.botAuctionAttempts = 0;
+      }
+      room.botAuctionAttempts = (room.botAuctionAttempts || 0) + 1;
+
+      if (Date.now() - room.botAuctionStartAt > 5000 || room.botAuctionAttempts > 5) {
+        console.error(`🚨 [Bot Watchdog] Bot/Autoplay player ${botToAct.username} auction decision exceeded limit! Forcing pass.`);
+        
+        try {
+          const result = passAuction(room.gameState, botToAct.id);
+          if (result.ok) {
+            broadcastEvents(io, room, result.events);
+            broadcastGameState(io, room);
+          }
+        } catch (e) {
+          console.error('[Bot Watchdog Auction Recovery Error]', e);
+        }
+
+        room.botAuctionStartAt = null;
+        room.botAuctionActivePlayerId = null;
+        room.botAuctionAttempts = 0;
+        room.botExecutingAction = false;
+        triggerBotCycle(io, room);
+        return;
+      }
+
       room.botExecutingAction = true;
       setTimeout(async () => {
         try {
           await executeBotAuctionDecision(io, room, botToAct.id);
         } catch (err) {
           console.error('[Bot Auction Error]', err);
+          try {
+            passAuction(room.gameState, botToAct.id);
+          } catch (recoveryErr) {
+            console.error('[Bot Auction Recovery Pass Error]', recoveryErr);
+          }
         } finally {
           room.botExecutingAction = false;
+          room.botAuctionStartAt = null;
+          room.botAuctionActivePlayerId = null;
+          room.botAuctionAttempts = 0;
           triggerBotCycle(io, room);
         }
       }, 1500);
@@ -1040,14 +1163,51 @@ const triggerBotCycle = (io, room) => {
   if (trade && trade.status === 'pending') {
     const botToAct = room.players.find(p => (p.isBot || p.autoplay || !p.connected) && p.id === trade.toPlayerId);
     if (botToAct) {
+      // 2.1 Watchdog for Trade
+      if (!room.botTradeStartAt || room.botTradeActivePlayerId !== botToAct.id) {
+        room.botTradeStartAt = Date.now();
+        room.botTradeActivePlayerId = botToAct.id;
+        room.botTradeAttempts = 0;
+      }
+      room.botTradeAttempts = (room.botTradeAttempts || 0) + 1;
+
+      if (Date.now() - room.botTradeStartAt > 5000 || room.botTradeAttempts > 5) {
+        console.error(`🚨 [Bot Watchdog] Bot/Autoplay player ${botToAct.username} trade decision exceeded limit! Forcing reject.`);
+        
+        try {
+          const result = rejectTrade(room.gameState, botToAct.id);
+          if (result.ok) {
+            broadcastEvents(io, room, result.events);
+            broadcastGameState(io, room);
+          }
+        } catch (e) {
+          console.error('[Bot Watchdog Trade Recovery Error]', e);
+        }
+
+        room.botTradeStartAt = null;
+        room.botTradeActivePlayerId = null;
+        room.botTradeAttempts = 0;
+        room.botExecutingAction = false;
+        triggerBotCycle(io, room);
+        return;
+      }
+
       room.botExecutingAction = true;
       setTimeout(async () => {
         try {
           await evaluateBotTradeDecision(io, room, botToAct.id);
         } catch (err) {
           console.error('[Bot Trade Error]', err);
+          try {
+            rejectTrade(room.gameState, botToAct.id);
+          } catch (recoveryErr) {
+            console.error('[Bot Trade Recovery Reject Error]', recoveryErr);
+          }
         } finally {
           room.botExecutingAction = false;
+          room.botTradeStartAt = null;
+          room.botTradeActivePlayerId = null;
+          room.botTradeAttempts = 0;
           triggerBotCycle(io, room);
         }
       }, 1500);
@@ -1059,14 +1219,69 @@ const triggerBotCycle = (io, room) => {
   const activePlayer = currentPlayer(room.gameState);
   if (activePlayer && room.players.find(p => p.id === activePlayer.id && (p.isBot || p.autoplay || !p.connected))) {
     const botId = activePlayer.id;
+
+    // 3.1 Watchdog for Standard Turn
+    if (!room.botTurnStartAt || room.botTurnActivePlayerId !== botId) {
+      room.botTurnStartAt = Date.now();
+      room.botTurnActivePlayerId = botId;
+      room.botTurnAttempts = 0;
+    }
+    room.botTurnAttempts = (room.botTurnAttempts || 0) + 1;
+
+    if (Date.now() - room.botTurnStartAt > 5000 || room.botTurnAttempts > 5) {
+      console.error(`🚨 [Bot Watchdog] Bot/Autoplay player ${activePlayer.username} turn exceeded timeout limit or maximum attempts! Forcing turn advancement.`);
+
+      const sysMsg = {
+        id: `sys-watchdog-${Date.now()}`,
+        playerId: 'system',
+        username: 'System',
+        text: `⚠️ [Watchdog] Forced turn transition for ${activePlayer.username} to keep the match moving.`,
+        ts: Date.now(),
+        isSystem: true
+      };
+      room.chatHistory.push(sysMsg);
+      io.to(room.code).emit('receive-message', envelope(true, { message: sysMsg }));
+
+      try {
+        const result = skipAfkTurn(room.gameState);
+        if (result.ok) {
+          broadcastEvents(io, room, result.events);
+          broadcastGameState(io, room);
+          startAfkTimer(io, room);
+        }
+      } catch (e) {
+        console.error('[Bot Watchdog Turn Recovery Error]', e);
+      }
+
+      room.botTurnStartAt = null;
+      room.botTurnActivePlayerId = null;
+      room.botTurnAttempts = 0;
+      room.botExecutingAction = false;
+      triggerBotCycle(io, room);
+      return;
+    }
+
     room.botExecutingAction = true;
     setTimeout(async () => {
       try {
         await executeBotTurn(io, room, botId);
       } catch (err) {
         console.error('[Bot Turn Error]', err);
+        try {
+          const result = skipAfkTurn(room.gameState);
+          if (result.ok) {
+            broadcastEvents(io, room, result.events);
+            broadcastGameState(io, room);
+            startAfkTimer(io, room);
+          }
+        } catch (recoveryErr) {
+          console.error('[Bot Turn Recovery Skip Error]', recoveryErr);
+        }
       } finally {
         room.botExecutingAction = false;
+        room.botTurnStartAt = null;
+        room.botTurnActivePlayerId = null;
+        room.botTurnAttempts = 0;
         triggerBotCycle(io, room);
       }
     }, 1500);
@@ -1869,6 +2084,17 @@ const mountGameSocket = (io) => {
 
       _dispatch(io, socket, gr.room, player.id, initiateTrade,
         [targetId, offer || {}, request || {}], ack);
+    });
+
+    // ── counter-trade ──────────────────────────────────────────────────────────
+    socket.on('counter-trade', ({ offer, request } = {}, ack) => {
+      const gr = guardInRoom(socket);  if (!gr.ok) return ackError(ack, gr.error);
+      const gp = guardPlaying(gr.room); if (!gp.ok) return ackError(ack, gp.error);
+      const player = findPlayerBySocket(gr.room, socket.id);
+      if (!player) return ackError(ack, 'You are not in this game');
+
+      _dispatch(io, socket, gr.room, player.id, counterTrade,
+        [offer || {}, request || {}], ack);
     });
 
     // ── accept-trade ──────────────────────────────────────────────────────────

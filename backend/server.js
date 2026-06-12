@@ -4,6 +4,13 @@ const cors = require("cors");
 const { Server } = require("socket.io");
 const { rateLimit } = require("express-rate-limit");
 require("dotenv").config();
+
+if (!process.env.JWT_SECRET) {
+  throw new Error("FATAL: JWT_SECRET environment variable is missing!");
+}
+if (!process.env.ADMIN_SECRET) {
+  throw new Error("FATAL: ADMIN_SECRET environment variable is missing!");
+}
 const { connectDB } = require("./socket/roomModel");
 const { seedDefaultUsers } = require("./socket/userModel");
 
@@ -53,7 +60,7 @@ const crypto = require('crypto');
 
 // Generate HMAC-based signature token for player validation
 const generateToken = (playerId) => {
-  const secret = process.env.JWT_SECRET || 'SafathSruthiJwtSecretKey2026!';
+  const secret = process.env.JWT_SECRET;
   const signature = crypto.createHmac('sha256', secret).update(playerId).digest('hex');
   return `${playerId}.${signature}`;
 };
@@ -64,7 +71,7 @@ const verifyToken = (token) => {
   const parts = token.split('.');
   if (parts.length !== 2) return null;
   const [playerId, signature] = parts;
-  const secret = process.env.JWT_SECRET || 'SafathSruthiJwtSecretKey2026!';
+  const secret = process.env.JWT_SECRET;
   const expectedSignature = crypto.createHmac('sha256', secret).update(playerId).digest('hex');
   if (signature === expectedSignature) {
     return playerId;
@@ -285,7 +292,7 @@ const adminRouter = express.Router();
 const verifyAdmin = (req, res, next) => {
   try {
     const secret = req.headers["x-admin-secret"];
-    const expectedSecret = process.env.ADMIN_SECRET || "SafathSruthiAdminSecret2026!";
+    const expectedSecret = process.env.ADMIN_SECRET;
     if (!secret || secret !== expectedSecret) {
       return res.status(403).json({ ok: false, error: "Access Denied: Invalid admin secret." });
     }

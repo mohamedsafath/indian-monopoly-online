@@ -426,6 +426,7 @@ export const MonopolyBoard = React.memo(function MonopolyBoard({
   onSellHouse,
   onSellHotel,
   onInitiateTrade,
+  onCounterTrade,
   onAcceptTrade,
   onRejectTrade,
   onCancelTrade,
@@ -711,6 +712,7 @@ export const MonopolyBoard = React.memo(function MonopolyBoard({
           properties={properties}
           activeTrade={currentActiveTrade}
           onInitiateTrade={onInitiateTrade}
+          onCounterTrade={onCounterTrade}
           onAcceptTrade={onAcceptTrade}
           onRejectTrade={onRejectTrade}
           onCancelTrade={onCancelTrade}

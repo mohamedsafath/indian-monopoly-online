@@ -31,6 +31,16 @@ import { useBoardAnimation }  from '@/hooks/useBoardAnimation';
 import { delay }              from '@/utils/animationHelpers';
 import { BOARD_TILES, TILE_BY_ID, COLOR_GROUP_META } from '@/utils/boardTiles';
 import { PLAYER_TOKENS }      from '@/utils/boardLayout';
+import {
+  playCoinSound,
+  playDiceRoll,
+  playJailSound,
+  playWinnerSound,
+  playTradeSound,
+  playBankruptcySound,
+  toggleMute,
+  getMuteStatus
+} from '../utils/audio';
 
 // ─────────────────────────────────────────────────────────────────────────────
 const stored = (k) => sessionStorage.getItem(k) ?? '';
@@ -316,6 +326,7 @@ export default function GameRoom() {
   const myId         = resolvedId;
 
   const [gameState,     setGameState]     = useState(null);
+  const [muted,         setMuted]         = useState(getMuteStatus());
   const [room,          setRoom]          = useState(null);
   const [chatMessages,  setChatMessages]  = useState([]);
   const [chatInput,     setChatInput]     = useState('');
@@ -659,6 +670,7 @@ export default function GameRoom() {
         // ── DICE ROLLED ──
         case 'DICE_ROLLED': {
           const { dice } = event.payload;
+          playDiceRoll();
           // Trigger dice roll animation
           await triggerRoll({
             d1: dice.d1,
@@ -726,6 +738,7 @@ export default function GameRoom() {
         // ── RENT PAID ──
         case 'RENT_PAID': {
           const { amount, fromId, toId, partial } = event.payload;
+          playCoinSound();
           boardAnimation.setRentInfo({ amount, fromId, toId, partial: partial ?? false });
 
           // Trigger visual coin flying and rent floater effects
@@ -753,6 +766,7 @@ export default function GameRoom() {
         // ── TAX PAID ──
         case 'TAX_PAID': {
           const { amount } = event.payload;
+          playCoinSound();
           boardAnimation.showToast({ type: 'tax', amount });
           await delay(1500);
           break;
@@ -761,6 +775,7 @@ export default function GameRoom() {
         // ── FREE PARKING ──
         case 'FREE_PARKING_COLLECT': {
           const { amount } = event.payload;
+          playCoinSound();
           boardAnimation.showToast({ type: 'collect', amount });
           await delay(1500);
           break;
@@ -769,6 +784,7 @@ export default function GameRoom() {
         // ── PASSED GO ──
         case 'PASSED_GO': {
           const { amount } = event.payload;
+          playCoinSound();
           boardAnimation.showToast({ type: 'go', amount });
           await delay(1500);
           break;
@@ -777,6 +793,7 @@ export default function GameRoom() {
         // ── PROPERTY BOUGHT ──
         case 'PROPERTY_BOUGHT': {
           const { tileId, price } = event.payload;
+          playCoinSound();
           boardAnimation.flashProperty(tileId);
           boardAnimation.setPendingPurchase(null);
           boardAnimation.showToast({ type: 'buy', amount: price, tileId });
@@ -792,6 +809,7 @@ export default function GameRoom() {
         case 'HOUSE_BUILT':
         case 'HOTEL_BUILT': {
           const { tileId, houses, hotel } = event.payload;
+          playCoinSound();
           boardAnimation.setHouseBuiltInfo({ tileId, houses: houses ?? 0, hotel: hotel ?? false });
           boardAnimation.flashProperty(tileId);
           boardAnimation.showToast({ type: event.type === 'HOTEL_BUILT' ? 'hotel' : 'house', tileId });
@@ -809,17 +827,22 @@ export default function GameRoom() {
         }
 
         // ── TRADE EVENTS ──
-        case 'TRADE_INITIATED': {
+        case 'TRADE_INITIATED':
+        case 'TRADE_COUNTERED': {
+          playTradeSound();
           boardAnimation.setActiveTrade(event.payload);
           break;
         }
-        case 'TRADE_COMPLETED':
+        case 'TRADE_COMPLETED': {
+          playWinnerSound();
+          boardAnimation.setActiveTrade(null);
+          boardAnimation.showToast({ type: 'trade', message: 'Trade completed!' });
+          break;
+        }
         case 'TRADE_REJECTED':
         case 'TRADE_CANCELLED': {
+          playBankruptcySound();
           boardAnimation.setActiveTrade(null);
-          if (event.type === 'TRADE_COMPLETED') {
-            boardAnimation.showToast({ type: 'trade', message: 'Trade completed!' });
-          }
           break;
         }
 
@@ -844,9 +867,23 @@ export default function GameRoom() {
         case 'PROPERTY_MORTGAGED': {
           const { tileId, amount } = event.payload;
           const tile = TILE_BY_ID[tileId];
+          playCoinSound();
           boardAnimation.flashProperty(tileId);
           boardAnimation.showToast({ type: 'mortgage', tileId, tileName: tile?.name, amount });
           await delay(2000);
+          break;
+        }
+
+        // ── JAIL EVENTS ──
+        case 'SENT_TO_JAIL':
+        case 'TRIPLE_DOUBLES_JAIL': {
+          playJailSound();
+          break;
+        }
+
+        // ── BANKRUPTCY ──
+        case 'PLAYER_BANKRUPTED': {
+          playBankruptcySound();
           break;
         }
 
@@ -952,6 +989,7 @@ export default function GameRoom() {
     };
     const onGameOver          = ({ data }) => {
       const winner = data?.username ?? 'Someone';
+      playWinnerSound();
       pushFeedEvent(`Game Over! ${winner} wins! 🏆`, '🎉');
       setTimeout(() => { alert(`🏆 ${winner} wins Monopoly India!`); navigate('/'); }, 800);
     };
@@ -1104,6 +1142,8 @@ export default function GameRoom() {
   // Trade actions
   const handleInitiateTrade = useCallback((targetId, offer, request) =>
     socketService.initiateTrade(targetId, offer, request), []);
+  const handleCounterTrade  = useCallback((offer, request) =>
+    socketService.counterTrade(offer, request), []);
   const handleAcceptTrade   = useCallback(() => socketService.acceptTrade(),  []);
   const handleRejectTrade   = useCallback(() => socketService.rejectTrade(),  []);
   const handleCancelTrade   = useCallback(() => socketService.cancelTrade(),  []);
@@ -1381,6 +1421,7 @@ export default function GameRoom() {
         onDismissRent={handleDismissRent}
         activeTrade={boardAnimation.activeTrade}
         onInitiateTrade={handleInitiateTrade}
+        onCounterTrade={handleCounterTrade}
         onAcceptTrade={handleAcceptTrade}
         onRejectTrade={handleRejectTrade}
         onCancelTrade={handleCancelTrade}
@@ -1424,6 +1465,7 @@ export default function GameRoom() {
     handleDismissRent,
     boardAnimation.activeTrade,
     handleInitiateTrade,
+    handleCounterTrade,
     handleAcceptTrade,
     handleRejectTrade,
     handleCancelTrade,
@@ -1888,6 +1930,22 @@ export default function GameRoom() {
             }}
           >
             👥 Players
+          </button>
+          <button
+            onClick={() => {
+              const newMute = toggleMute();
+              setMuted(newMute);
+            }}
+            className="px-2 md:px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1"
+            style={{
+              background: muted ? 'rgba(239,68,68,0.1)' : 'rgba(34,197,94,0.1)',
+              color: muted ? '#f87171' : '#4ade80',
+              border: muted ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(34,197,94,0.3)',
+              fontFamily: "'DM Sans', sans-serif",
+            }}
+            title={muted ? 'Unmute Sound Effects' : 'Mute Sound Effects'}
+          >
+            {muted ? '🔇 Muted' : '🔊 Sound'}
           </button>
           <ConnectionStatus />
           {gameState?.status === 'playing' && (

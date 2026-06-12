@@ -164,6 +164,8 @@ const voteKickHost        = (accept)     => emit('vote-kick-host', { accept });
 // Trade
 const initiateTrade = (targetId, offer, request) =>
   emit('initiate-trade', { targetId, offer, request });
+const counterTrade = (offer, request) =>
+  emit('counter-trade', { offer, request });
 const acceptTrade  = ()  => emit('accept-trade');
 const rejectTrade  = ()  => emit('reject-trade');
 const cancelTrade  = ()  => emit('cancel-trade');
@@ -222,6 +224,7 @@ const socketService = {
   requestKickHost,
   voteKickHost,
   initiateTrade,
+  counterTrade,
   acceptTrade,
   rejectTrade,
   cancelTrade,
