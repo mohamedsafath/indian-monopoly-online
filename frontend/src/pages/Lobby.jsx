@@ -162,6 +162,7 @@ export default function Lobby() {
   const { roomCode } = useParams();
   const navigate     = useNavigate();
   const [showRuleBook, setShowRuleBook] = useState(false);
+  const [showBotDifficultyMenu, setShowBotDifficultyMenu] = useState(false);
 
   // Resolve playerId/username from localStorage if not in sessionStorage (e.g. copied direct link)
   let resolvedId = stored('mi_playerId');
@@ -530,9 +531,10 @@ export default function Lobby() {
     }
   }, []);
 
-  const handleAddBot = useCallback(async () => {
+  const handleAddBot = useCallback(async (difficulty = 'medium') => {
     try {
-      await socketService.addBot();
+      await socketService.addBot({ difficulty });
+      setShowBotDifficultyMenu(false);
     } catch (err) {
       setError(err.message);
     }
@@ -796,18 +798,50 @@ export default function Lobby() {
                 Players in room ({players.length}/8)
               </span>
               {isHost && players.length < 8 && (
-                <button
-                  onClick={handleAddBot}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer hover:bg-yellow-500/20"
-                  style={{
-                    background: 'rgba(212,175,55,0.08)',
-                    color: '#f59e0b',
-                    border: '1px solid rgba(212,175,55,0.25)',
-                    fontFamily: "'DM Sans', sans-serif"
-                  }}
-                >
-                  🤖 Add AI Bot
-                </button>
+                <div className="relative">
+                  <button
+                    onClick={() => setShowBotDifficultyMenu(prev => !prev)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer hover:bg-yellow-500/20"
+                    style={{
+                      background: 'rgba(212,175,55,0.08)',
+                      color: '#f59e0b',
+                      border: '1px solid rgba(212,175,55,0.25)',
+                      fontFamily: "'DM Sans', sans-serif"
+                    }}
+                  >
+                    🤖 Add AI Bot
+                  </button>
+                  {showBotDifficultyMenu && (
+                    <div className="absolute right-0 mt-2 w-32 rounded-xl flex flex-col gap-1 p-1.5 z-40 backdrop-blur-md animate-fade-in"
+                         style={{
+                           background: 'rgba(15,10,5,0.95)',
+                           border: '1.5px solid rgba(212,175,55,0.35)',
+                           boxShadow: '0 8px 32px rgba(0,0,0,0.6)'
+                         }}>
+                      <button
+                        onClick={() => handleAddBot('easy')}
+                        className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold text-green-400 hover:bg-green-500/10 transition-colors duration-150 cursor-pointer"
+                        style={{ fontFamily: "'DM Sans', sans-serif" }}
+                      >
+                        🟢 Easy Bot
+                      </button>
+                      <button
+                        onClick={() => handleAddBot('medium')}
+                        className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold text-yellow-400 hover:bg-yellow-500/10 transition-colors duration-150 cursor-pointer"
+                        style={{ fontFamily: "'DM Sans', sans-serif" }}
+                      >
+                        🟡 Medium Bot
+                      </button>
+                      <button
+                        onClick={() => handleAddBot('hard')}
+                        className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold text-red-400 hover:bg-red-500/10 transition-colors duration-150 cursor-pointer"
+                        style={{ fontFamily: "'DM Sans', sans-serif" }}
+                      >
+                        🔴 Hard Bot
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 

@@ -605,57 +605,102 @@ const proposeBotTradeProactive = (io, room, botId) => {
   const player = gameState.players[botId];
   if (!player || player.isBankrupt || player.money < 500) return false;
 
-  // Find color groups we want to complete
-  const groups = {};
-  for (const tile of BOARD_TILES) {
-    if (tile.group) {
-      if (!groups[tile.group]) groups[tile.group] = [];
-      groups[tile.group].push(tile.id);
+  const difficulty = player.difficulty || 'medium';
+
+  // 1. Proactive property-for-property swap (Hard bots only)
+  if (difficulty === 'hard') {
+    for (const opponentId of Object.keys(gameState.players)) {
+      const opponent = gameState.players[opponentId];
+      if (opponentId !== botId && !opponent.isBankrupt && !opponent.isBot) {
+        // Find properties bot owns that completes opponent's monopoly
+        const botPropsToGive = Object.keys(gameState.properties).filter(id => {
+          const propState = gameState.properties[id];
+          return propState.ownerId === botId && _completesMonopolyForPlayer(gameState, opponentId, Number(id));
+        }).map(Number);
+
+        // Find properties opponent owns that completes bot's monopoly
+        const opponentPropsToGet = Object.keys(gameState.properties).filter(id => {
+          const propState = gameState.properties[id];
+          return propState.ownerId === opponentId && _completesMonopolyForPlayer(gameState, botId, Number(id));
+        }).map(Number);
+
+        if (botPropsToGive.length > 0 && opponentPropsToGet.length > 0) {
+          const giveTileId = botPropsToGive[0];
+          const getTileId = opponentPropsToGet[0];
+          const giveTile = TILE_BY_ID[giveTileId];
+          const getTile = TILE_BY_ID[getTileId];
+
+          room.lastProposedTradeTurnIdx = gameState.currentTurnIdx;
+          console.log(`🤖 Bot ${player.username} proposing property swap to ${opponent.username}: giving ${giveTile.name} for ${getTile.name}`);
+          
+          sendBotChatMessage(io, room, botId, `Hey @${opponent.username}, let's make a win-win deal! I'll swap my ${giveTile.name} for your ${getTile.name}. It completes a set for both of us! 🤝`);
+
+          _dispatch(io, null, room, botId, initiateTrade, [
+            opponentId,
+            { money: 0, propertyIds: [giveTileId] },
+            { money: 0, propertyIds: [getTileId] }
+          ]);
+          return true;
+        }
+      }
     }
   }
 
-  // Analyze each group
-  for (const [groupName, tileIds] of Object.entries(groups)) {
-    const ownedByBot = tileIds.filter(id => gameState.properties[id]?.ownerId === botId);
-    const totalInGroup = tileIds.length;
+  // 2. Proactive cash-for-property trade (Medium & Hard bots)
+  if (difficulty !== 'easy') {
+    // Find color groups we want to complete
+    const groups = {};
+    for (const tile of BOARD_TILES) {
+      if (tile.group) {
+        if (!groups[tile.group]) groups[tile.group] = [];
+        groups[tile.group].push(tile.id);
+      }
+    }
 
-    // We own part of the group, but not all (not a monopoly yet)
-    if (ownedByBot.length > 0 && ownedByBot.length < totalInGroup) {
-      // Find the missing tile(s)
-      const missingIds = tileIds.filter(id => {
-        const pState = gameState.properties[id];
-        return pState && pState.ownerId && pState.ownerId !== botId;
-      });
+    // Analyze each group
+    for (const [groupName, tileIds] of Object.entries(groups)) {
+      const ownedByBot = tileIds.filter(id => gameState.properties[id]?.ownerId === botId);
+      const totalInGroup = tileIds.length;
 
-      if (missingIds.length === 1) {
-        const missingId = missingIds[0];
-        const targetOwnerId = gameState.properties[missingId].ownerId;
-        const targetOwner = gameState.players[targetOwnerId];
+      // We own part of the group, but not all (not a monopoly yet)
+      if (ownedByBot.length > 0 && ownedByBot.length < totalInGroup) {
+        // Find the missing tile(s)
+        const missingIds = tileIds.filter(id => {
+          const pState = gameState.properties[id];
+          return pState && pState.ownerId && pState.ownerId !== botId;
+        });
 
-        if (targetOwner && !targetOwner.isBankrupt && !targetOwner.isBot) {
-          // We can propose to this human player!
-          const missingTile = TILE_BY_ID[missingId];
-          const cashOffer = Math.floor(missingTile.price * 1.35);
+        if (missingIds.length === 1) {
+          const missingId = missingIds[0];
+          const targetOwnerId = gameState.properties[missingId].ownerId;
+          const targetOwner = gameState.players[targetOwnerId];
 
-          if (player.money >= cashOffer + 400) {
-            // Propose trade!
-            room.lastProposedTradeTurnIdx = gameState.currentTurnIdx;
-            console.log(`🤖 Bot ${player.username} proposing trade to ${targetOwner.username}: offering ${cashOffer} for ${missingTile.name}`);
+          if (targetOwner && !targetOwner.isBankrupt && !targetOwner.isBot) {
+            // We can propose to this human player!
+            const missingTile = TILE_BY_ID[missingId];
+            const cashOffer = Math.floor(missingTile.price * 1.35);
 
-            // Broadcast trade commentary
-            sendBotChatMessage(io, room, botId, `Hey @${targetOwner.username}, I really want to complete my ${groupName} set. I'll offer you ₹${cashOffer} for ${missingTile.name}. What do you say? 🤝`);
+            if (player.money >= cashOffer + 400) {
+              // Propose trade!
+              room.lastProposedTradeTurnIdx = gameState.currentTurnIdx;
+              console.log(`🤖 Bot ${player.username} proposing trade to ${targetOwner.username}: offering ${cashOffer} for ${missingTile.name}`);
 
-            _dispatch(io, null, room, botId, initiateTrade, [
-              targetOwnerId,
-              { money: cashOffer, propertyIds: [] },
-              { money: 0, propertyIds: [missingId] }
-            ]);
-            return true;
+              // Broadcast trade commentary
+              sendBotChatMessage(io, room, botId, `Hey @${targetOwner.username}, I really want to complete my ${groupName} set. I'll offer you ₹${cashOffer} for ${missingTile.name}. What do you say? 🤝`);
+
+              _dispatch(io, null, room, botId, initiateTrade, [
+                targetOwnerId,
+                { money: cashOffer, propertyIds: [] },
+                { money: 0, propertyIds: [missingId] }
+              ]);
+              return true;
+            }
           }
         }
       }
     }
   }
+
   return false;
 };
 
@@ -720,10 +765,48 @@ const raiseBotCash = (io, room, botId) => {
   return _dispatch(io, null, room, botId, declareBankruptcy, []);
 };
 
+const _getDynamicUpgradeReserve = (gameState, player) => {
+  const difficulty = player.difficulty || 'medium';
+  if (difficulty === 'easy') {
+    return 2000;
+  }
+
+  let baseReserve = difficulty === 'hard' ? 600 : 1000;
+  let opponentRentMultiplier = difficulty === 'hard' ? 0.25 : 0.50;
+
+  // Find the highest current rent of any active opponent's properties to protect against immediate bankruptcy
+  let maxOpponentRent = 0;
+  for (const [tileId, propState] of Object.entries(gameState.properties)) {
+    if (propState.ownerId && propState.ownerId !== player.id && !propState.mortgaged) {
+      const tile = TILE_BY_ID[tileId];
+      if (tile) {
+        let rent = 0;
+        if (tile.houseCost) {
+          const houses = propState.houses || 0;
+          const hotel = propState.hotel || false;
+          if (hotel) {
+            rent = tile.rent[5];
+          } else {
+            rent = tile.rent[houses];
+          }
+        }
+        if (rent > maxOpponentRent) {
+          maxOpponentRent = rent;
+        }
+      }
+    }
+  }
+
+  return baseReserve + Math.floor(maxOpponentRent * opponentRentMultiplier);
+};
+
 const upgradeBotProperties = (io, room, botId) => {
   const gameState = room.gameState;
   const player = gameState.players[botId];
-  if (player.money < 1500) return false;
+  if (!player) return false;
+
+  const reserve = _getDynamicUpgradeReserve(gameState, player);
+  if (player.money < reserve) return false;
 
   for (const tileId of Object.keys(gameState.properties)) {
     const tile = TILE_BY_ID[tileId];
@@ -731,15 +814,15 @@ const upgradeBotProperties = (io, room, botId) => {
 
     // Check hotel upgrade first
     const checkHotel = canBuildHotel(gameState.properties, botId, Number(tileId));
-    if (checkHotel.canBuild && player.money >= 1500 + tile.houseCost) {
-      console.log(`🤖 Bot ${player.username} upgrading to hotel on tile ${tileId}`);
+    if (checkHotel.canBuild && player.money >= reserve + tile.houseCost) {
+      console.log(`🤖 Bot ${player.username} upgrading to hotel on tile ${tileId} (reserve: ${reserve})`);
       return _dispatch(io, null, room, botId, buildHotel, [Number(tileId)]);
     }
 
     // Check house upgrade
     const checkHouse = canBuildHouse(gameState.properties, botId, Number(tileId));
-    if (checkHouse.canBuild && player.money >= 1500 + tile.houseCost) {
-      console.log(`🤖 Bot ${player.username} building house on tile ${tileId}`);
+    if (checkHouse.canBuild && player.money >= reserve + tile.houseCost) {
+      console.log(`🤖 Bot ${player.username} building house on tile ${tileId} (reserve: ${reserve})`);
       return _dispatch(io, null, room, botId, buildHouse, [Number(tileId)]);
     }
   }
@@ -757,17 +840,36 @@ const executeBotAuctionDecision = async (io, room, botId) => {
 
   const tile = TILE_BY_ID[auction.tileId];
   
-  // Dynamic strategic ceiling calculations
-  let ceilingFactor = 0.80 + Math.random() * 0.10; // Baseline ceiling: 80% to 90%
+  // Dynamic strategic ceiling calculations based on bot difficulty
+  const difficulty = player.difficulty || 'medium';
+  let ceilingFactor = 0.80 + Math.random() * 0.10; // Default Medium
+  let completesBoost = 1.15;
+  let defensiveBoost = 0.95;
+
+  if (difficulty === 'easy') {
+    ceilingFactor = 0.50 + Math.random() * 0.15;
+    completesBoost = 0.70;
+    defensiveBoost = 0.60;
+  } else if (difficulty === 'hard') {
+    ceilingFactor = 0.95 + Math.random() * 0.15;
+    completesBoost = 1.50;
+    defensiveBoost = 1.25;
+    // Cash-rich extra aggressive bidding
+    if (player.money > 2000) {
+      const cashBoost = Math.min(0.25, (player.money / 20000) * 0.15);
+      ceilingFactor += cashBoost;
+    }
+  }
+
   let isSpecialBid = false;
   let chatComment = '';
 
   if (_completesMonopolyForPlayer(gameState, botId, auction.tileId)) {
-    ceilingFactor = 1.15; // Monopoly completion boost!
+    ceilingFactor = Math.max(ceilingFactor, completesBoost);
     isSpecialBid = true;
     chatComment = `This completes my monopoly on ${tile.group}! I am going all in! 🚀`;
   } else if (_isGroupHotForOthers(gameState, botId, tile.group)) {
-    ceilingFactor = 0.95; // Defensive blocking bid
+    ceilingFactor = Math.max(ceilingFactor, defensiveBoost);
     isSpecialBid = true;
     chatComment = `Not so fast! I can't let you get a monopoly on ${tile.group} that easily! 😉`;
   }
@@ -799,6 +901,46 @@ const executeBotAuctionDecision = async (io, room, botId) => {
   }
 };
 
+const _getTileTradeValue = (gameState, viewerId, otherPlayerId, tileId, isGivingAway) => {
+  const tile = TILE_BY_ID[tileId];
+  if (!tile) return 0;
+  
+  let val = tile.price;
+  const propState = gameState.properties[tileId];
+  if (propState && propState.houses > 0) {
+    val += (propState.houses * tile.houseCost) / 2;
+  }
+
+  if (tile.type === 'railway') {
+    const otherRailwaysCount = BOARD_TILES.filter(t => t.id !== tileId && t.type === 'railway' && gameState.properties[t.id]?.ownerId === viewerId).length;
+    if (otherRailwaysCount === 1) val *= 1.25;
+    else if (otherRailwaysCount === 2) val *= 1.6;
+    else if (otherRailwaysCount === 3) val *= 2.0;
+  } else if (tile.type === 'utility') {
+    const otherUtilitiesCount = BOARD_TILES.filter(t => t.id !== tileId && t.type === 'utility' && gameState.properties[t.id]?.ownerId === viewerId).length;
+    if (otherUtilitiesCount === 1) val *= 1.8;
+  } else if (tile.group) {
+    if (isGivingAway) {
+      if (hasMonopoly(gameState.properties, viewerId, tileId)) {
+        val *= 2.0;
+      } else if (_completesMonopolyForPlayer(gameState, otherPlayerId, tileId)) {
+        val *= 1.8;
+      }
+    } else {
+      if (_completesMonopolyForPlayer(gameState, viewerId, tileId)) {
+        val *= 1.8;
+      } else {
+        const inSameGroup = BOARD_TILES.some(t => t.id !== tileId && t.group === tile.group && gameState.properties[t.id]?.ownerId === viewerId);
+        if (inSameGroup) {
+          val *= 1.35;
+        }
+      }
+    }
+  }
+
+  return val;
+};
+
 const evaluateBotTradeDecision = async (io, room, botId) => {
   const gameState = room.gameState;
   const trade = gameState.activeTrade;
@@ -810,38 +952,13 @@ const evaluateBotTradeDecision = async (io, room, botId) => {
   // Proposer gives to bot:
   let receiveVal = trade.offer.money ?? 0;
   for (const propId of (trade.offer.propertyIds ?? [])) {
-    const tile = TILE_BY_ID[propId];
-    if (!tile) continue;
-    let propVal = tile.price;
-    const propState = gameState.properties[propId];
-    if (propState && propState.houses > 0) {
-      propVal += (propState.houses * tile.houseCost) / 2;
-    }
-    // Strategic multipliers
-    if (_completesMonopolyForPlayer(gameState, botId, propId)) {
-      propVal *= 1.8;
-    } else {
-      const inSameGroup = tile.group ? BOARD_TILES.some(t => t.id !== propId && t.group === tile.group && gameState.properties[t.id]?.ownerId === botId) : false;
-      if (inSameGroup) {
-        propVal *= 1.3;
-      }
-    }
-    receiveVal += propVal;
+    receiveVal += _getTileTradeValue(gameState, botId, trade.fromPlayerId, propId, false);
   }
 
   // Bot gives to proposer:
   let giveVal = trade.request.money ?? 0;
   for (const propId of (trade.request.propertyIds ?? [])) {
-    const tile = TILE_BY_ID[propId];
-    if (!tile) continue;
-    let propVal = tile.price;
-    // Strategic multipliers
-    if (hasMonopoly(gameState.properties, botId, propId)) {
-      propVal *= 2.0;
-    } else if (_completesMonopolyForPlayer(gameState, trade.fromPlayerId, propId)) {
-      propVal *= 1.8;
-    }
-    giveVal += propVal;
+    giveVal += _getTileTradeValue(gameState, botId, trade.fromPlayerId, propId, true);
   }
 
   console.log(`🤖 Bot ${player.username} trade evaluation: receiveVal = ${receiveVal}, giveVal = ${giveVal}`);
@@ -1755,10 +1872,11 @@ const mountGameSocket = (io) => {
       if (!initResult.ok) return ackError(ack, initResult.error);
 
       room.gameState = initResult.gameState;
-      // Copy isBot field into gameState.players just in case
+      // Copy isBot and difficulty fields into gameState.players just in case
       room.players.forEach(p => {
         if (p.isBot && room.gameState.players[p.id]) {
           room.gameState.players[p.id].isBot = true;
+          room.gameState.players[p.id].difficulty = p.difficulty || 'medium';
           room.gameState.players[p.id].socketId = null;
           room.gameState.players[p.id].isConnected = true;
         }
@@ -1787,7 +1905,7 @@ const mountGameSocket = (io) => {
     });
 
     // ── add-bot ───────────────────────────────────────────────────────────────
-    socket.on('add-bot', (_, ack) => {
+    socket.on('add-bot', (payload = {}, ack) => {
       const gr = guardInRoom(socket);
       if (!gr.ok) return ackError(ack, gr.error);
       const { room } = gr;
@@ -1796,6 +1914,11 @@ const mountGameSocket = (io) => {
       const player = findPlayerBySocket(room, socket.id);
       if (!player || room.hostId !== player.id) return ackError(ack, 'Only the host can add bots');
       if (room.players.length >= MAX_PLAYERS) return ackError(ack, 'Room is full');
+
+      let difficulty = 'medium';
+      if (payload && typeof payload === 'object' && ['easy', 'medium', 'hard'].includes(payload.difficulty)) {
+        difficulty = payload.difficulty;
+      }
 
       const botNames = ['Birbal', 'Tenali', 'Chanakya', 'Aryabhata', 'Shakuntala', 'Vikram', 'Kalidasa'];
       // Filter out names already in the room
@@ -1815,6 +1938,7 @@ const mountGameSocket = (io) => {
         disconnectedAt: null,
         isBot: true,
         token: defaultToken,
+        difficulty: difficulty,
       };
 
       room.players.push(botPlayer);
@@ -2582,5 +2706,7 @@ module.exports = {
   mountGameSocket,
   rooms,
   destroyRoom,
-  socketToRoom
+  socketToRoom,
+  triggerBotCycle,
+  evaluateBotTradeDecision
 };

@@ -115,7 +115,7 @@ const startGame = () => emit('start-game');
 const getRoomState = () => emit('get-room-state');
 
 /** Add a new bot (host only) */
-const addBot = () => emit('add-bot');
+const addBot = (options) => emit('add-bot', options);
 
 /** Remove a bot (host only) */
 const removeBot = (playerId) => emit('remove-bot', { playerId });

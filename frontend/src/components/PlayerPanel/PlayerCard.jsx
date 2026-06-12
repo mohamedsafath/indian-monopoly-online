@@ -69,6 +69,18 @@ export default function PlayerCard({
             </span>
           )}
 
+          {player.isBot && (
+            <span className="text-xs px-1.5 py-0.5 rounded font-medium capitalize"
+                  style={{
+                    background: player.difficulty === 'easy' ? 'rgba(34,197,94,0.15)' : player.difficulty === 'hard' ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)',
+                    color: player.difficulty === 'easy' ? '#4ade80' : player.difficulty === 'hard' ? '#f87171' : '#fbbf24',
+                    border: `1px solid ${player.difficulty === 'easy' ? 'rgba(34,197,94,0.25)' : player.difficulty === 'hard' ? 'rgba(239,68,68,0.25)' : 'rgba(245,158,11,0.25)'}`,
+                    fontFamily: "'DM Sans', sans-serif"
+                  }}>
+              🤖 {player.difficulty || 'medium'}
+            </span>
+          )}
+
           {!connected && (
             <span className="text-xs px-1.5 py-0.5 rounded"
                   style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171',
