@@ -23,6 +23,7 @@ const PlayerSchema = new mongoose.Schema({
   isSpectator: { type: Boolean, default: false },
   isBot: { type: Boolean, default: false },
   autoplay: { type: Boolean, default: false },
+  difficulty: { type: String, default: 'medium' },
 });
 
 const RoomSchema = new mongoose.Schema({
@@ -208,6 +209,7 @@ const loadActiveRooms = async () => {
           isSpectator: Boolean(p.isSpectator),
           isBot: Boolean(p.isBot),
           autoplay: Boolean(p.autoplay),
+          difficulty: p.difficulty || 'medium',
         })),
         spectators: (doc.spectators || []).map((p) => ({
           id: p.id,
@@ -243,6 +245,7 @@ const loadActiveRooms = async () => {
           isSpectator: Boolean(p.isSpectator),
           isBot: Boolean(p.isBot),
           autoplay: Boolean(p.autoplay),
+          difficulty: p.difficulty || 'medium',
         })),
         spectators: (r.spectators || []).map((p) => ({
           id: p.id,

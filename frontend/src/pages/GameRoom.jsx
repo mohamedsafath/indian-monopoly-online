@@ -706,9 +706,12 @@ export default function GameRoom() {
           await new Promise((resolve) => {
             cardDismissResolverRef.current = resolve;
 
-            // If it's another player's turn, or if they have autoplay enabled, auto-draw and auto-dismiss on this client
-            const playerState = gameStateRef.current?.players[playerId];
-            const isAutoplay = playerState?.autoplay || playerState?.isBot;
+            // Determine if the drawing player is a bot or has autoplay active
+            const pRoom = room?.players?.find(p => p.id === playerId);
+            const pState = pendingGameStateRef.current?.players[playerId] || gameStateRef.current?.players[playerId];
+            const isBot = pRoom?.isBot || pState?.isBot || playerId.startsWith('bot_') || pState?.username?.includes('Bot') || pState?.username?.includes('🤖');
+            const isAutoplay = pRoom?.autoplay || pState?.autoplay || isBot;
+
             if (playerId !== myId || isAutoplay) {
               setTimeout(() => {
                 if (cardDismissResolverRef.current === resolve) {
@@ -720,6 +723,18 @@ export default function GameRoom() {
                   }, 4000);
                 }
               }, 1200);
+            } else {
+              // Safety fallback: if human player is AFK or UI is stuck, auto-dismiss after 12 seconds
+              setTimeout(() => {
+                if (cardDismissResolverRef.current === resolve) {
+                  boardAnimation.showCard(card);
+                  setTimeout(() => {
+                    if (cardDismissResolverRef.current === resolve) {
+                      handleDismissCard();
+                    }
+                  }, 4000);
+                }
+              }, 12000);
             }
           });
           if (event.message) {
@@ -750,15 +765,25 @@ export default function GameRoom() {
           await new Promise((resolve) => {
             rentDismissResolverRef.current = resolve;
 
-            // If another player is paying, or if they have autoplay enabled, auto-dismiss after 4 seconds
-            const playerState = gameStateRef.current?.players[fromId];
-            const isAutoplay = playerState?.autoplay || playerState?.isBot;
+            // Determine if the paying player is a bot or has autoplay active
+            const pRoom = room?.players?.find(p => p.id === fromId);
+            const pState = pendingGameStateRef.current?.players[fromId] || gameStateRef.current?.players[fromId];
+            const isBot = pRoom?.isBot || pState?.isBot || fromId.startsWith('bot_') || pState?.username?.includes('Bot') || pState?.username?.includes('🤖');
+            const isAutoplay = pRoom?.autoplay || pState?.autoplay || isBot;
+
             if (fromId !== myId || isAutoplay) {
               setTimeout(() => {
                 if (rentDismissResolverRef.current === resolve) {
                   handleDismissRent();
                 }
               }, 4000);
+            } else {
+              // Safety fallback: if human player is AFK or UI is stuck, auto-dismiss rent screen after 10 seconds
+              setTimeout(() => {
+                if (rentDismissResolverRef.current === resolve) {
+                  handleDismissRent();
+                }
+              }, 10000);
             }
           });
 
