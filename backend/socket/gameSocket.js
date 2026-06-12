@@ -821,7 +821,7 @@ const evaluateBotTradeDecision = async (io, room, botId) => {
     if (_completesMonopolyForPlayer(gameState, botId, propId)) {
       propVal *= 1.8;
     } else {
-      const inSameGroup = BOARD_TILES.some(t => t.id !== propId && t.group === tile.group && gameState.properties[t.id].ownerId === botId);
+      const inSameGroup = tile.group ? BOARD_TILES.some(t => t.id !== propId && t.group === tile.group && gameState.properties[t.id]?.ownerId === botId) : false;
       if (inSameGroup) {
         propVal *= 1.3;
       }
@@ -868,7 +868,7 @@ const evaluateBotTradeDecision = async (io, room, botId) => {
       if (_completesMonopolyForPlayer(gameState, trade.fromPlayerId, propId)) {
         completesProposerMonopolyTile = tile;
       }
-      const inSameGroup = BOARD_TILES.some(t => t.id !== propId && t.group === tile.group && gameState.properties[t.id]?.ownerId === botId);
+      const inSameGroup = tile.group ? BOARD_TILES.some(t => t.id !== propId && t.group === tile.group && gameState.properties[t.id]?.ownerId === botId) : false;
       if (inSameGroup) {
         botWantsToKeepTile = tile;
       }
@@ -1015,7 +1015,11 @@ const triggerBotCycle = (io, room) => {
         } catch (err) {
           console.error('[Bot End Game Vote Error]', err);
           try {
-            voteEndGame(room.gameState, botToAct.id, true);
+            const result = voteEndGame(room.gameState, botToAct.id, true);
+            if (result.ok) {
+              broadcastEvents(io, room, result.events);
+              broadcastGameState(io, room);
+            }
           } catch (recoveryErr) {
             console.error('[Bot End Game Vote Recovery Error]', recoveryErr);
           }
@@ -1079,7 +1083,11 @@ const triggerBotCycle = (io, room) => {
         } catch (err) {
           console.error('[Bot Kick Host Vote Error]', err);
           try {
-            voteKickHost(room.gameState, botToAct.id, true);
+            const result = voteKickHost(room.gameState, botToAct.id, true);
+            if (result.ok) {
+              broadcastEvents(io, room, result.events);
+              broadcastGameState(io, room);
+            }
           } catch (recoveryErr) {
             console.error('[Bot Kick Host Vote Recovery Error]', recoveryErr);
           }
@@ -1142,7 +1150,11 @@ const triggerBotCycle = (io, room) => {
         } catch (err) {
           console.error('[Bot Auction Error]', err);
           try {
-            passAuction(room.gameState, botToAct.id);
+            const result = passAuction(room.gameState, botToAct.id);
+            if (result.ok) {
+              broadcastEvents(io, room, result.events);
+              broadcastGameState(io, room);
+            }
           } catch (recoveryErr) {
             console.error('[Bot Auction Recovery Pass Error]', recoveryErr);
           }
@@ -1199,7 +1211,11 @@ const triggerBotCycle = (io, room) => {
         } catch (err) {
           console.error('[Bot Trade Error]', err);
           try {
-            rejectTrade(room.gameState, botToAct.id);
+            const result = rejectTrade(room.gameState, botToAct.id);
+            if (result.ok) {
+              broadcastEvents(io, room, result.events);
+              broadcastGameState(io, room);
+            }
           } catch (recoveryErr) {
             console.error('[Bot Trade Recovery Reject Error]', recoveryErr);
           }

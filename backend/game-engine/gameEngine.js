@@ -1903,30 +1903,40 @@ const acceptTrade = (gameState, playerId) => {
   const toPlayer   = gameState.players[trade.toPlayerId];
 
   // Final validation before execution (balances may have changed)
+  let cancelReason = null;
   if (fromPlayer.money < 0 || toPlayer.money < 0) {
-    gameState.activeTrade = null;
-    return fail('Players in debt cannot participate in trades — trade cancelled');
-  }
-  if (fromPlayer.money < trade.offer.money) {
-    gameState.activeTrade = null;
-    return fail('Proposer no longer has sufficient funds — trade cancelled');
-  }
-  if (toPlayer.money < trade.request.money) {
-    gameState.activeTrade = null;
-    return fail('You no longer have sufficient funds — trade cancelled');
-  }
-  // Validate that offered and requested properties are still owned by the respective parties
-  for (const tileId of trade.offer.propertyIds) {
-    if (gameState.properties[tileId]?.ownerId !== trade.fromPlayerId) {
-      gameState.activeTrade = null;
-      return fail('Offer properties are no longer owned by the proposer — trade cancelled');
+    cancelReason = 'Players in debt cannot participate in trades';
+  } else if (fromPlayer.money < trade.offer.money) {
+    cancelReason = `${fromPlayer.username} no longer has sufficient funds`;
+  } else if (toPlayer.money < trade.request.money) {
+    cancelReason = `${toPlayer.username} no longer has sufficient funds`;
+  } else {
+    for (const tileId of trade.offer.propertyIds) {
+      if (gameState.properties[tileId]?.ownerId !== trade.fromPlayerId) {
+        cancelReason = `Offered property ${TILE_BY_ID[tileId]?.name ?? 'property'} is no longer owned by ${fromPlayer.username}`;
+        break;
+      }
+    }
+    if (!cancelReason) {
+      for (const tileId of trade.request.propertyIds) {
+        if (gameState.properties[tileId]?.ownerId !== trade.toPlayerId) {
+          cancelReason = `Requested property ${TILE_BY_ID[tileId]?.name ?? 'property'} is no longer owned by ${toPlayer.username}`;
+          break;
+        }
+      }
     }
   }
-  for (const tileId of trade.request.propertyIds) {
-    if (gameState.properties[tileId]?.ownerId !== trade.toPlayerId) {
-      gameState.activeTrade = null;
-      return fail('Requested properties are no longer owned by the recipient — trade cancelled');
-    }
+
+  if (cancelReason) {
+    trade.status = 'cancelled';
+    gameState.activeTrade = null;
+    const events = [evt(
+      EVENT_TYPES.TRADE_CANCELLED,
+      { tradeId: trade.tradeId, fromPlayerId: trade.fromPlayerId, toPlayerId: trade.toPlayerId, reason: cancelReason },
+      `⚠️ Trade cancelled: ${cancelReason}`,
+    )];
+    _appendLog(gameState, events);
+    return ok(events);
   }
   // ── Execute transfers ────────────────────────────────────────────────────
   // Money
