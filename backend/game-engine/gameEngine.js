@@ -1158,10 +1158,17 @@ const useJailCard = (gameState, playerId) => {
  * without passing GO (so no ₹2,000 reward).
  */
 const _sendToJail = (gameState, player, events) => {
+  const fromPos = player.position;
   player.position       = JAIL_TILE;
   player.inJail         = true;
   player.jailTurnsUsed  = 0;
   player.doublesStreak  = 0;
+
+  events.push(evt(
+    EVENT_TYPES.PLAYER_MOVED,
+    { playerId: player.id, from: fromPos, to: JAIL_TILE, teleport: true },
+    ''
+  ));
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

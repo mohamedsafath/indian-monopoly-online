@@ -706,8 +706,10 @@ export default function GameRoom() {
           await new Promise((resolve) => {
             cardDismissResolverRef.current = resolve;
 
-            // If it's another player's turn, auto-draw and auto-dismiss on this client
-            if (playerId !== myId) {
+            // If it's another player's turn, or if they have autoplay enabled, auto-draw and auto-dismiss on this client
+            const playerState = gameStateRef.current?.players[playerId];
+            const isAutoplay = playerState?.autoplay || playerState?.isBot;
+            if (playerId !== myId || isAutoplay) {
               setTimeout(() => {
                 if (cardDismissResolverRef.current === resolve) {
                   boardAnimation.showCard(card);
@@ -748,8 +750,10 @@ export default function GameRoom() {
           await new Promise((resolve) => {
             rentDismissResolverRef.current = resolve;
 
-            // If another player is paying, auto-dismiss after 4 seconds
-            if (fromId !== myId) {
+            // If another player is paying, or if they have autoplay enabled, auto-dismiss after 4 seconds
+            const playerState = gameStateRef.current?.players[fromId];
+            const isAutoplay = playerState?.autoplay || playerState?.isBot;
+            if (fromId !== myId || isAutoplay) {
               setTimeout(() => {
                 if (rentDismissResolverRef.current === resolve) {
                   handleDismissRent();
