@@ -1838,12 +1838,15 @@ const initiateTrade = (gameState, fromPlayerId, toPlayerId, offer, request) => {
     return fail('Request money must be a valid non-negative number');
   }
 
+  const offerPropertyIds = (offer.propertyIds ?? []).map(Number);
+  const requestPropertyIds = (request.propertyIds ?? []).map(Number);
+
   // Validate offer money
   if (offerMoney > fromPlayer.money) {
     return fail('You cannot offer more money than you have');
   }
   // Validate offer properties
-  for (const tileId of (offer.propertyIds ?? [])) {
+  for (const tileId of offerPropertyIds) {
     if (gameState.properties[tileId]?.ownerId !== fromPlayerId) {
       return fail(`You do not own property at tile ${tileId}`);
     }
@@ -1853,13 +1856,13 @@ const initiateTrade = (gameState, fromPlayerId, toPlayerId, offer, request) => {
     return fail('Target player does not have that much money');
   }
   // Validate request properties
-  for (const tileId of (request.propertyIds ?? [])) {
+  for (const tileId of requestPropertyIds) {
     if (gameState.properties[tileId]?.ownerId !== toPlayerId) {
       return fail(`Target player does not own property at tile ${tileId}`);
     }
   }
 
-  const allIds = [...(offer.propertyIds || []), ...(request.propertyIds || [])];
+  const allIds = [...offerPropertyIds, ...requestPropertyIds];
   for (const tileId of allIds) {
     const groupTiles = getColorGroupTiles(tileId);
     const groupHasBuildings = groupTiles.some(
@@ -1876,8 +1879,8 @@ const initiateTrade = (gameState, fromPlayerId, toPlayerId, offer, request) => {
     tradeId,
     fromPlayerId,
     toPlayerId,
-    offer:   { money: offerMoney,   propertyIds: offer.propertyIds ?? [] },
-    request: { money: requestMoney, propertyIds: request.propertyIds ?? [] },
+    offer:   { money: offerMoney,   propertyIds: offerPropertyIds },
+    request: { money: requestMoney, propertyIds: requestPropertyIds },
     status: 'pending',
     initiatedAt: Date.now(),
   };
@@ -2065,12 +2068,15 @@ const counterTrade = (gameState, playerId, offer, request) => {
     return fail('Request money must be a valid non-negative number');
   }
 
+  const offerPropertyIds = (offer.propertyIds ?? []).map(Number);
+  const requestPropertyIds = (request.propertyIds ?? []).map(Number);
+
   // Validate new offer money (offered by the countering player)
   if (offerMoney > toPlayer.money) {
     return fail('You cannot offer more money than you have');
   }
   // Validate new offer properties (owned by the countering player)
-  for (const tileId of (offer.propertyIds ?? [])) {
+  for (const tileId of offerPropertyIds) {
     if (gameState.properties[tileId]?.ownerId !== playerId) {
       return fail(`You do not own property at tile ${tileId}`);
     }
@@ -2080,14 +2086,14 @@ const counterTrade = (gameState, playerId, offer, request) => {
     return fail('Target player does not have that much money');
   }
   // Validate new request properties (owned by the original proposer)
-  for (const tileId of (request.propertyIds ?? [])) {
+  for (const tileId of requestPropertyIds) {
     if (gameState.properties[tileId]?.ownerId !== trade.fromPlayerId) {
       return fail(`Target player does not own property at tile ${tileId}`);
     }
   }
 
   // Validate buildings in color groups
-  const allIds = [...(offer.propertyIds || []), ...(request.propertyIds || [])];
+  const allIds = [...offerPropertyIds, ...requestPropertyIds];
   for (const tileId of allIds) {
     const groupTiles = getColorGroupTiles(tileId);
     const groupHasBuildings = groupTiles.some(
@@ -2101,8 +2107,8 @@ const counterTrade = (gameState, playerId, offer, request) => {
   // Update trade state
   trade.fromPlayerId = playerId;            // Counters is now the proposer
   trade.toPlayerId = fromPlayer.id;          // Original proposer is now target
-  trade.offer = { money: offerMoney, propertyIds: offer.propertyIds ?? [] };
-  trade.request = { money: requestMoney, propertyIds: request.propertyIds ?? [] };
+  trade.offer = { money: offerMoney, propertyIds: offerPropertyIds };
+  trade.request = { money: requestMoney, propertyIds: requestPropertyIds };
   trade.initiatedAt = Date.now();
 
   const events = [evt(

@@ -255,12 +255,18 @@ export function TradeModal({
                 }
               }}
               onCounter={() => {
-                // Pre-fill counter-offer states in reverse
+                // Pre-fill counter-offer states in reverse safely
                 setTargetId(activeTrade.fromPlayerId);
-                setOfferProps(new Set(activeTrade.request.propertyIds));
-                setOfferCash(activeTrade.request.money || '');
-                setRequestProps(new Set(activeTrade.offer.propertyIds));
-                setRequestCash(activeTrade.offer.money || '');
+                
+                const reqProps = (activeTrade.request?.propertyIds || []).map(Number);
+                const reqCash = activeTrade.request?.money || '';
+                const offProps = (activeTrade.offer?.propertyIds || []).map(Number);
+                const offCash = activeTrade.offer?.money || '';
+
+                setOfferProps(new Set(reqProps));
+                setOfferCash(reqCash);
+                setRequestProps(new Set(offProps));
+                setRequestCash(offCash);
                 setIsCounterMode(true);
               }}
             />
