@@ -1748,7 +1748,6 @@ const mountGameSocket = (io) => {
         return ackError(ack, 'Room is full');
       }
 
-      const playerId = clientPlayerId || socket.id;
 
       // Check if player already exists in players or spectators
       let existingPlayer = room.players.find(p => p.id === playerId);
