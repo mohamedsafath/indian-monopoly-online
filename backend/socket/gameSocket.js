@@ -1132,11 +1132,11 @@ const executeBotTurn = async (io, room, botId) => {
 
 const triggerBotCycle = (io, room) => {
   if (!room.gameState || room.gameState.status !== 'playing') return;
-  if (room.botExecutingAction) return;
 
   // 0. Check if there is an active end game vote
   const endGameVote = room.gameState.endGameVote;
   if (endGameVote) {
+    if (room.botExecutingEndGameVote) return;
     const botToAct = room.players.find(p => 
       (p.isBot || p.autoplay || !p.connected) && 
       !room.gameState.players[p.id]?.isBankrupt &&
@@ -1168,12 +1168,12 @@ const triggerBotCycle = (io, room) => {
         room.botEndGameVoteStartAt = null;
         room.botEndGameVoteActivePlayerId = null;
         room.botEndGameVoteAttempts = 0;
-        room.botExecutingAction = false;
+        room.botExecutingEndGameVote = false;
         triggerBotCycle(io, room);
         return;
       }
 
-      room.botExecutingAction = true;
+      room.botExecutingEndGameVote = true;
       setTimeout(async () => {
         try {
           const curr = room.players.find(p => p.id === botToAct.id);
@@ -1195,7 +1195,7 @@ const triggerBotCycle = (io, room) => {
             console.error('[Bot End Game Vote Recovery Error]', recoveryErr);
           }
         } finally {
-          room.botExecutingAction = false;
+          room.botExecutingEndGameVote = false;
           room.botEndGameVoteStartAt = null;
           room.botEndGameVoteActivePlayerId = null;
           room.botEndGameVoteAttempts = 0;
@@ -1209,6 +1209,7 @@ const triggerBotCycle = (io, room) => {
   // 0.1. Check if there is an active kick host vote
   const kickHostVote = room.gameState.kickHostVote;
   if (kickHostVote) {
+    if (room.botExecutingKickHostVote) return;
     const botToAct = room.players.find(p => 
       (p.isBot || p.autoplay || !p.connected) && 
       !room.gameState.players[p.id]?.isBankrupt &&
@@ -1241,12 +1242,12 @@ const triggerBotCycle = (io, room) => {
         room.botKickHostVoteStartAt = null;
         room.botKickHostVoteActivePlayerId = null;
         room.botKickHostVoteAttempts = 0;
-        room.botExecutingAction = false;
+        room.botExecutingKickHostVote = false;
         triggerBotCycle(io, room);
         return;
       }
 
-      room.botExecutingAction = true;
+      room.botExecutingKickHostVote = true;
       setTimeout(async () => {
         try {
           const curr = room.players.find(p => p.id === botToAct.id);
@@ -1268,7 +1269,7 @@ const triggerBotCycle = (io, room) => {
             console.error('[Bot Kick Host Vote Recovery Error]', recoveryErr);
           }
         } finally {
-          room.botExecutingAction = false;
+          room.botExecutingKickHostVote = false;
           room.botKickHostVoteStartAt = null;
           room.botKickHostVoteActivePlayerId = null;
           room.botKickHostVoteAttempts = 0;
@@ -1278,6 +1279,8 @@ const triggerBotCycle = (io, room) => {
       return;
     }
   }
+
+  if (room.botExecutingAction) return;
 
   // 1. Check if there is an active auction and a bot needs to act
   const auction = room.gameState.activeAuction;
