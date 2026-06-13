@@ -3105,7 +3105,7 @@ export default function GameRoom() {
                           {p.id === room?.hostId && <span className="text-[10px] px-1 py-0.5 rounded bg-amber-500/15 text-amber-500 font-bold uppercase">Host</span>}
                         </span>
                         <span className="text-[10px] text-gray-500">
-                          ₹{Number(p.money ?? 0).toLocaleString('en-IN')} • {p.isBankrupt ? 'Bankrupt' : 'Active'}
+                          {p.isBankrupt ? 'Bankrupt' : 'Active'}
                         </span>
                       </div>
                     </div>
