@@ -335,6 +335,7 @@ export default function GameRoom() {
   const [toast,         setToast]         = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
   const [systemAlert,  setSystemAlert]   = useState('');
+  const [isSocketConnected, setIsSocketConnected] = useState(socket.connected);
   
   const [showEndGameModal, setShowEndGameModal] = useState(false);
   const [showPlayersModal, setShowPlayersModal] = useState(false);
@@ -487,6 +488,7 @@ export default function GameRoom() {
   // ── Initial connect ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!myId) { navigate('/'); return; }
+    socketService.updateSocketQuery(roomCode, myId);
     const init = async () => {
       try {
         if (!socket.connected) {
@@ -866,13 +868,19 @@ export default function GameRoom() {
         case 'TRADE_COMPLETED': {
           playWinnerSound();
           boardAnimation.setActiveTrade(null);
-          boardAnimation.showToast({ type: 'trade', message: 'Trade completed!' });
+          boardAnimation.showToast({ type: 'trade', message: 'Trade completed successfully!' });
           break;
         }
-        case 'TRADE_REJECTED':
+        case 'TRADE_REJECTED': {
+          playBankruptcySound();
+          boardAnimation.setActiveTrade(null);
+          boardAnimation.showToast({ type: 'trade', message: 'Trade was rejected by the player.' });
+          break;
+        }
         case 'TRADE_CANCELLED': {
           playBankruptcySound();
           boardAnimation.setActiveTrade(null);
+          boardAnimation.showToast({ type: 'trade', message: `Trade cancelled: ${event.payload?.reason || 'Trade was cancelled.'}` });
           break;
         }
 
@@ -1052,7 +1060,12 @@ export default function GameRoom() {
       showToast('💰 Loan repaid in full. Credit line cleared!', 'success');
     };
 
+    const onDisconnect = () => {
+      setIsSocketConnected(false);
+    };
+
     const onConnect = () => {
+      setIsSocketConnected(true);
       console.log('[GameRoom] Socket connected/reconnected, restoring match state...');
       let attempts = 0;
       const attemptReconnect = () => {
@@ -1085,6 +1098,7 @@ export default function GameRoom() {
     };
 
     socket.on('connect',            onConnect);
+    socket.on('disconnect',         onDisconnect);
     socket.on('game-updated',        onGameUpdated);
     socket.on('game-events',         onGameEvents);
     socket.on('room-updated',        onRoomUpdated);
@@ -1101,6 +1115,7 @@ export default function GameRoom() {
     socket.on('loan-repaid',         onLoanRepaid);
     return () => {
       socket.off('connect',            onConnect);
+      socket.off('disconnect',         onDisconnect);
       socket.off('game-updated',        onGameUpdated);
       socket.off('game-events',         onGameEvents);
       socket.off('room-updated',        onRoomUpdated);
@@ -1575,6 +1590,19 @@ export default function GameRoom() {
   return (
     <div className="h-screen h-[100dvh] flex flex-col overflow-hidden"
       style={{ background:'#080604', fontFamily:"'DM Sans',sans-serif", color:'#f3f4f6', height: '100vh', maxHeight: '100vh' }}>
+
+      {!isSocketConnected && (
+        <div className="w-full py-1.5 px-4 text-center text-[10px] font-black uppercase tracking-widest relative z-50 flex items-center justify-center gap-1.5 animate-pulse flex-shrink-0"
+             style={{
+               background: 'linear-gradient(90deg, #7f1d1d 0%, #ef4444 50%, #7f1d1d 100%)',
+               borderBottom: '1.5px solid #fca5a5',
+               color: '#fee2e2',
+               boxShadow: '0 4px 12px rgba(239,68,68,0.3)',
+               textShadow: '0 1px 1px rgba(0,0,0,0.6)'
+             }}>
+          <span>⚠️ Connection Lost. Reconnecting to server...</span>
+        </div>
+      )}
 
       {systemAlert && (
         <div className="w-full py-2 px-4 text-center text-[10px] font-black uppercase tracking-widest relative z-50 flex items-center justify-center gap-1.5 transition-all duration-300 flex-shrink-0"

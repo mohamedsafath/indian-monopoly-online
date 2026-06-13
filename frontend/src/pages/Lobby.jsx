@@ -226,6 +226,7 @@ export default function Lobby() {
   const [loading,      setLoading]     = useState(true);
   const [startLoading, setStartLoading] = useState(false);
   const [readyLoading, setReadyLoading] = useState(false);
+  const [isSocketConnected, setIsSocketConnected] = useState(socket.connected);
 
   // Audio recording states
   const [isRecording, setIsRecording] = useState(false);
@@ -317,6 +318,7 @@ export default function Lobby() {
       navigate('/');
       return;
     }
+    socketService.updateSocketQuery(roomCode, myId);
 
     // If socket not connected, attempt reconnect
     const init = async () => {
@@ -455,7 +457,11 @@ export default function Lobby() {
         setSystemAlert(data.message);
       }
     };
+    const onDisconnect = () => {
+      setIsSocketConnected(false);
+    };
     const onConnect = () => {
+      setIsSocketConnected(true);
       console.log('[Lobby] Socket connected/reconnected, restoring lobby state...');
       let attempts = 0;
       const attemptReconnect = () => {
@@ -481,6 +487,7 @@ export default function Lobby() {
     };
 
     socket.on('connect',            onConnect);
+    socket.on('disconnect',         onDisconnect);
     socket.on('room-updated',       onRoomUpdated);
     socket.on('player-joined',      onPlayerJoined);
     socket.on('player-left',        onPlayerLeft);
@@ -494,6 +501,7 @@ export default function Lobby() {
 
     return () => {
       socket.off('connect',            onConnect);
+      socket.off('disconnect',         onDisconnect);
       socket.off('room-updated',       onRoomUpdated);
       socket.off('player-joined',      onPlayerJoined);
       socket.off('player-left',        onPlayerLeft);
@@ -598,6 +606,19 @@ export default function Lobby() {
     <div className="min-h-screen flex flex-col"
          style={{ background:'radial-gradient(ellipse at 20% 0%,#1c0f00 0%,#0a0805 60%,#050302 100%)',
                   fontFamily:"'DM Sans',sans-serif" }}>
+
+      {!isSocketConnected && (
+        <div className="w-full py-2 px-4 text-center text-xs font-bold uppercase tracking-widest relative z-50 flex items-center justify-center gap-2 animate-pulse"
+             style={{
+               background: 'linear-gradient(90deg, #7f1d1d 0%, #ef4444 50%, #7f1d1d 100%)',
+               borderBottom: '1.5px solid #fca5a5',
+               color: '#fee2e2',
+               boxShadow: '0 4px 15px rgba(239,68,68,0.3)',
+               textShadow: '0 1px 2px rgba(0,0,0,0.5)'
+             }}>
+          <span>⚠️ Connection Lost. Reconnecting to server...</span>
+        </div>
+      )}
 
       {systemAlert && (
         <div className="w-full py-2.5 px-4 text-center text-xs font-bold uppercase tracking-widest relative z-50 flex items-center justify-center gap-2 transition-all duration-300"

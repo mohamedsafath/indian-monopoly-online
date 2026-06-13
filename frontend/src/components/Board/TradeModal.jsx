@@ -241,7 +241,6 @@ export function TradeModal({
                   onClose();
                 } catch (err) {
                   setError(err.message || 'Failed to accept trade');
-                  onClose();
                 }
               }}
               onReject={async () => {
@@ -251,7 +250,6 @@ export function TradeModal({
                   onClose();
                 } catch (err) {
                   setError(err.message || 'Failed to reject trade');
-                  onClose();
                 }
               }}
               onCounter={() => {
@@ -287,7 +285,6 @@ export function TradeModal({
                   onClose();
                 } catch (err) {
                   setError(err.message || 'Failed to cancel trade');
-                  onClose();
                 }
               }}
               style={{

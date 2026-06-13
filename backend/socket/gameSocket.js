@@ -1176,8 +1176,13 @@ const triggerBotCycle = (io, room) => {
       room.botExecutingAction = true;
       setTimeout(async () => {
         try {
-          console.log(`🤖 Bot ${botToAct.username} automatically voting YES to end game request`);
-          _dispatch(io, null, room, botToAct.id, voteEndGame, [true]);
+          const curr = room.players.find(p => p.id === botToAct.id);
+          if (curr && (curr.isBot || curr.autoplay || !curr.connected)) {
+            console.log(`🤖 Bot ${botToAct.username} automatically voting YES to end game request`);
+            _dispatch(io, null, room, botToAct.id, voteEndGame, [true]);
+          } else {
+            console.log(`[Bot End Game Vote] Player ${botToAct.id} reconnected. Aborting YES vote.`);
+          }
         } catch (err) {
           console.error('[Bot End Game Vote Error]', err);
           try {
@@ -1244,8 +1249,13 @@ const triggerBotCycle = (io, room) => {
       room.botExecutingAction = true;
       setTimeout(async () => {
         try {
-          console.log(`🤖 Bot ${botToAct.username} automatically voting YES to kick host request`);
-          _dispatch(io, null, room, botToAct.id, voteKickHost, [true]);
+          const curr = room.players.find(p => p.id === botToAct.id);
+          if (curr && (curr.isBot || curr.autoplay || !curr.connected)) {
+            console.log(`🤖 Bot ${botToAct.username} automatically voting YES to kick host request`);
+            _dispatch(io, null, room, botToAct.id, voteKickHost, [true]);
+          } else {
+            console.log(`[Bot Kick Host Vote] Player ${botToAct.id} reconnected. Aborting YES vote.`);
+          }
         } catch (err) {
           console.error('[Bot Kick Host Vote Error]', err);
           try {
@@ -1312,7 +1322,12 @@ const triggerBotCycle = (io, room) => {
       room.botExecutingAction = true;
       setTimeout(async () => {
         try {
-          await executeBotAuctionDecision(io, room, botToAct.id);
+          const curr = room.players.find(p => p.id === botToAct.id);
+          if (curr && (curr.isBot || curr.autoplay || !curr.connected)) {
+            await executeBotAuctionDecision(io, room, botToAct.id);
+          } else {
+            console.log(`[Bot Auction] Player ${botToAct.id} reconnected. Aborting bot auction decision.`);
+          }
         } catch (err) {
           console.error('[Bot Auction Error]', err);
           try {
@@ -1373,7 +1388,12 @@ const triggerBotCycle = (io, room) => {
       room.botExecutingAction = true;
       setTimeout(async () => {
         try {
-          await evaluateBotTradeDecision(io, room, botToAct.id);
+          const curr = room.players.find(p => p.id === botToAct.id);
+          if (curr && (curr.isBot || curr.autoplay || !curr.connected)) {
+            await evaluateBotTradeDecision(io, room, botToAct.id);
+          } else {
+            console.log(`[Bot Trade] Player ${botToAct.id} reconnected. Aborting bot trade decision.`);
+          }
         } catch (err) {
           console.error('[Bot Trade Error]', err);
           try {
@@ -1444,9 +1464,17 @@ const triggerBotCycle = (io, room) => {
     }
 
     room.botExecutingAction = true;
+    const isDisconnectedHuman = !matchingPlayer.isBot && !matchingPlayer.autoplay && !matchingPlayer.connected;
+    const delayMs = isDisconnectedHuman ? 8000 : 1500;
+
     setTimeout(async () => {
       try {
-        await executeBotTurn(io, room, botId);
+        const curr = room.players.find(p => p.id === botId);
+        if (curr && (curr.isBot || curr.autoplay || !curr.connected)) {
+          await executeBotTurn(io, room, botId);
+        } else {
+          console.log(`[Bot Turn] Player ${botId} reconnected in time. Aborting bot turn.`);
+        }
       } catch (err) {
         console.error('[Bot Turn Error]', err);
         try {
@@ -1466,7 +1494,7 @@ const triggerBotCycle = (io, room) => {
         room.botTurnAttempts = 0;
         triggerBotCycle(io, room);
       }
-    }, 1500);
+    }, delayMs);
     return;
   }
 };
