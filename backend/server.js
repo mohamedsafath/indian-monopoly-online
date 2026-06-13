@@ -6,10 +6,12 @@ const { rateLimit } = require("express-rate-limit");
 require("dotenv").config();
 
 if (!process.env.JWT_SECRET) {
-  throw new Error("FATAL: JWT_SECRET environment variable is missing!");
+  console.warn("⚠️ [Security] JWT_SECRET environment variable is missing! Falling back to default secret.");
+  process.env.JWT_SECRET = "SafathSruthiJwtSecretKey2026!";
 }
 if (!process.env.ADMIN_SECRET) {
-  throw new Error("FATAL: ADMIN_SECRET environment variable is missing!");
+  console.warn("⚠️ [Security] ADMIN_SECRET environment variable is missing! Falling back to default secret.");
+  process.env.ADMIN_SECRET = "SafathSruthiAdminSecret2026!";
 }
 const { connectDB } = require("./socket/roomModel");
 const { seedDefaultUsers } = require("./socket/userModel");
