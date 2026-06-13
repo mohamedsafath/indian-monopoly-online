@@ -1597,8 +1597,10 @@ export default function GameRoom() {
       )}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,700&family=DM+Sans:wght@400;500;600;700;800;900&display=swap');
-        ::-webkit-scrollbar { width: 3px }
-        ::-webkit-scrollbar-thumb { background: rgba(212,175,55,0.18); border-radius: 4px }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.05); }
+        ::-webkit-scrollbar-thumb { background: rgba(212, 175, 55, 0.25); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(212, 175, 55, 0.45); }
 
         @keyframes confettiFall {
           0% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); opacity: 1; }
@@ -2232,7 +2234,7 @@ export default function GameRoom() {
           style={{ width: '280px', borderLeft:'1px solid rgba(255,255,255,0.05)', height: '100%' }}>
           
           {/* Chat Container */}
-          <div className="flex flex-col" style={{ height: '55%', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+          <div className="flex flex-col" style={{ height: '42%', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
             <div className="px-3 py-2 flex-shrink-0"
               style={{ borderBottom:'1px solid rgba(255,255,255,0.05)' }}>
               <h3 className="text-xs font-bold uppercase tracking-widest"
@@ -2401,7 +2403,7 @@ export default function GameRoom() {
 
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: '#f3f4f6', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#f3f4f6', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block', lineHeight: 'normal' }}>
                             {tile.name}
                           </span>
                           {mortgaged && (

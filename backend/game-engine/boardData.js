@@ -933,7 +933,7 @@ const findNearestTile = (currentPosition, targetIds) => {
 const isTilePurchasable = (tileId) =>
   PURCHASABLE_TILE_IDS.includes(tileId);
 
-const canBuildHouse = (properties, playerId, tileId) => {
+const canBuildHouse = (properties, playerId, tileId, playerPosition) => {
   const tile = TILE_BY_ID[tileId];
   const prop = properties[tileId];
 
@@ -950,26 +950,21 @@ const canBuildHouse = (properties, playerId, tileId) => {
   if (!hasMonopoly(properties, playerId, tileId))
     return { canBuild: false, reason: 'Must own the entire color group first' };
 
+  // Check if player is currently landed on this property
+  if (playerPosition !== undefined && Number(playerPosition) !== Number(tileId)) {
+    return { canBuild: false, reason: 'You must land on the property to build on it' };
+  }
+
   const groupTiles  = getColorGroupTiles(tileId);
   const hasMortgaged = groupTiles.some((id) => properties[id]?.mortgaged);
   if (hasMortgaged) {
     return { canBuild: false, reason: 'Cannot build if any property in the color group is mortgaged' };
   }
-  const otherCounts = groupTiles
-    .filter((id) => id !== tileId)
-    .map((id) => {
-      const p = properties[id];
-      return p.hotel ? 4 : (p.houses || 0);
-    });
-  const minOther = Math.min(...otherCounts);
-
-  if (prop.houses > minOther)
-    return { canBuild: false, reason: 'Must build evenly — build on other group properties first' };
 
   return { canBuild: true, reason: null };
 };
 
-const canBuildHotel = (properties, playerId, tileId) => {
+const canBuildHotel = (properties, playerId, tileId, playerPosition) => {
   const tile = TILE_BY_ID[tileId];
   const prop = properties[tileId];
 
@@ -986,16 +981,15 @@ const canBuildHotel = (properties, playerId, tileId) => {
   if (!hasMonopoly(properties, playerId, tileId))
     return { canBuild: false, reason: 'Must own the entire color group' };
 
+  // Check if player is currently landed on this property
+  if (playerPosition !== undefined && Number(playerPosition) !== Number(tileId)) {
+    return { canBuild: false, reason: 'You must land on the property to build on it' };
+  }
+
   const groupTiles = getColorGroupTiles(tileId);
   const hasMortgaged = groupTiles.some((id) => properties[id]?.mortgaged);
   if (hasMortgaged) {
     return { canBuild: false, reason: 'Cannot build if any property in the color group is mortgaged' };
-  }
-  const siblingsHaveFour = groupTiles.every(
-    (id) => properties[id].hotel || properties[id].houses >= 4
-  );
-  if (!siblingsHaveFour) {
-    return { canBuild: false, reason: 'All properties in the group must have 4 houses before building a hotel' };
   }
 
   return { canBuild: true, reason: null };

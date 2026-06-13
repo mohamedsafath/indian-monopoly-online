@@ -345,6 +345,9 @@ const initializeGame = (roomId, players) => {
 
     // Winner
     winnerId:       null,
+
+    // Track property tile IDs built on during the current turn
+    builtThisTurn:  [],
   };
 
   return { ok: true, gameState };
@@ -868,8 +871,13 @@ const buildHouse = (gameState, playerId, tileId) => {
 
   if (!player || player.isBankrupt) return fail('Invalid player');
 
+  if (!gameState.builtThisTurn) gameState.builtThisTurn = [];
+  if (gameState.builtThisTurn.includes(tileId)) {
+    return fail('You can only build one house/hotel per landing on this property');
+  }
+
   // canBuildHouse checks ownership, monopoly, even-build, mortgage, hotel
-  const check = canBuildHouse(gameState.properties, playerId, tileId);
+  const check = canBuildHouse(gameState.properties, playerId, tileId, player.position);
   if (!check.canBuild) return fail(check.reason);
 
   if (gameState.houseBank <= 0) return fail('No houses left in the bank');
@@ -880,6 +888,7 @@ const buildHouse = (gameState, playerId, tileId) => {
   player.money       -= tile.houseCost;
   prop.houses        += 1;
   gameState.houseBank -= 1;
+  gameState.builtThisTurn.push(tileId);
 
   const events = [evt(
     EVENT_TYPES.HOUSE_BUILT,
@@ -907,7 +916,12 @@ const buildHotel = (gameState, playerId, tileId) => {
 
   if (!player || player.isBankrupt) return fail('Invalid player');
 
-  const check = canBuildHotel(gameState.properties, playerId, tileId);
+  if (!gameState.builtThisTurn) gameState.builtThisTurn = [];
+  if (gameState.builtThisTurn.includes(tileId)) {
+    return fail('You can only build one house/hotel per landing on this property');
+  }
+
+  const check = canBuildHotel(gameState.properties, playerId, tileId, player.position);
   if (!check.canBuild) return fail(check.reason);
 
   if (gameState.hotelBank <= 0) return fail('No hotels left in the bank');
@@ -921,6 +935,7 @@ const buildHotel = (gameState, playerId, tileId) => {
   prop.houses          = 0;
   prop.hotel           = true;
   player.hotelsBuiltCount = (player.hotelsBuiltCount ?? 0) + 1;
+  gameState.builtThisTurn.push(tileId);
 
   const events = [evt(
     EVENT_TYPES.HOTEL_BUILT,
@@ -1640,6 +1655,7 @@ const _advanceTurn = (gameState) => {
   gameState.hasRolled     = false;
   gameState.pendingAction = null;
   gameState.activeTrade   = null;
+  gameState.builtThisTurn = [];
 
   // Find next non-bankrupt player
   let nextIdx = gameState.currentTurnIdx;

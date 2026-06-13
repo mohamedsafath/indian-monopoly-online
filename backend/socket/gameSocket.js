@@ -814,14 +814,14 @@ const upgradeBotProperties = (io, room, botId) => {
     if (!tile || !tile.houseCost) continue;
 
     // Check hotel upgrade first
-    const checkHotel = canBuildHotel(gameState.properties, botId, Number(tileId));
+    const checkHotel = canBuildHotel(gameState.properties, botId, Number(tileId), player.position);
     if (checkHotel.canBuild && player.money >= reserve + tile.houseCost) {
       console.log(`🤖 Bot ${player.username} upgrading to hotel on tile ${tileId} (reserve: ${reserve})`);
       return _dispatch(io, null, room, botId, buildHotel, [Number(tileId)]);
     }
 
     // Check house upgrade
-    const checkHouse = canBuildHouse(gameState.properties, botId, Number(tileId));
+    const checkHouse = canBuildHouse(gameState.properties, botId, Number(tileId), player.position);
     if (checkHouse.canBuild && player.money >= reserve + tile.houseCost) {
       console.log(`🤖 Bot ${player.username} building house on tile ${tileId} (reserve: ${reserve})`);
       return _dispatch(io, null, room, botId, buildHouse, [Number(tileId)]);

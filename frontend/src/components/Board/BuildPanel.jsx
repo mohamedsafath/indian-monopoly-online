@@ -197,8 +197,11 @@ export function BuildPanel({
             const hotel      = prop?.hotel   ?? false;
             const houseCost  = tile.houseCost ?? 0;
 
-            const canBuildHouse = !hotel && houses < 4 && (me?.money ?? 0) >= houseCost && houseBank > 0;
-            const canBuildHotel = !hotel && houses === 4 && (me?.money ?? 0) >= houseCost && hotelBank > 0;
+            const isLanded = me?.position === tile.id;
+            const alreadyBuilt = (gameState?.builtThisTurn || []).includes(tile.id);
+
+            const canBuildHouse = !hotel && houses < 4 && (me?.money ?? 0) >= houseCost && houseBank > 0 && isLanded && !alreadyBuilt;
+            const canBuildHotel = !hotel && houses === 4 && (me?.money ?? 0) >= houseCost && hotelBank > 0 && isLanded && !alreadyBuilt;
             const canSellHouse  = !hotel && houses > 0;
             const canSellHotel  = hotel;
 
@@ -306,7 +309,17 @@ export function BuildPanel({
                   )}
                 </div>
 
-                {!canBuildHouse && !hotel && houses < 4 && (
+                {!isLanded && (
+                  <div style={{ fontSize: 9, color: 'rgba(156,163,175,0.45)', marginTop: 5, fontWeight: 600 }}>
+                    📍 Land on this property to build houses/hotels
+                  </div>
+                )}
+                {isLanded && alreadyBuilt && (
+                  <div style={{ fontSize: 9, color: '#fbbf24', marginTop: 5, fontWeight: 600 }}>
+                    ✨ Already built a house/hotel here this landing. Land here again to build more!
+                  </div>
+                )}
+                {isLanded && !alreadyBuilt && !canBuildHouse && !hotel && houses < 4 && (
                   <div style={{ fontSize: 9, color: '#f87171', marginTop: 5, fontWeight: 600 }}>
                     {houseBank === 0 ? '❌ No houses in bank' : `⚠️ Need ₹${fmt(houseCost - (me?.money ?? 0))} more`}
                   </div>
