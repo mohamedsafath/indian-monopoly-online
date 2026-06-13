@@ -192,6 +192,7 @@ const lobbySnapshot = (room) => ({
     token:     p.token,
     isBot:     Boolean(p.isBot),
     autoplay:  Boolean(p.autoplay),
+    difficulty: p.difficulty || 'medium',
   })),
   spectators: (room.spectators || []).map((p) => ({
     id:        p.id,
