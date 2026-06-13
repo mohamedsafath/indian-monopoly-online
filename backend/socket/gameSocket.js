@@ -244,6 +244,54 @@ const _recordCompletedMatch = (room) => {
     };
     
     saveMatch(matchData);
+
+    // Automatically update lifetime statistics for all registered human players
+    const { findUserById, updateUserStats } = require('./userModel');
+    for (const member of room.players) {
+      if (member.isBot || !member.id.startsWith('google_')) continue;
+      
+      const myRank = rankings.find(r => r.playerId === member.id);
+      if (!myRank) continue;
+      
+      findUserById(member.id).then(async (user) => {
+        if (!user) return;
+        
+        const isWinner = winnerId === member.id;
+        const newGames = (user.games ?? 0) + 1;
+        const newWins = (user.wins ?? 0) + (isWinner ? 1 : 0);
+        const newLosses = (user.losses ?? 0) + (isWinner ? 0 : 1);
+        const newLoans = (user.loansTaken ?? 0) + (myRank.loansTaken ?? 0);
+        const newProps = (user.propertiesPurchased ?? 0) + (myRank.propertiesPurchased ?? 0);
+        const newNetWorth = (user.totalNetWorthEarned ?? 0) + (myRank.netWorth ?? 0);
+        const newMortgages = (user.propertiesMortgaged ?? 0) + (myRank.propertiesMortgaged ?? 0);
+        const newRepossessed = (user.propertiesRepossessed ?? 0) + (myRank.propertiesRepossessed ?? 0);
+        const newAuctions = (user.auctionsWon ?? 0) + (myRank.auctionsWon ?? 0);
+        const newRentPaid = (user.rentPaid ?? 0) + (myRank.rentPaid ?? 0);
+        const newRentEarned = (user.rentEarned ?? 0) + (myRank.rentEarned ?? 0);
+        const newBankruptcies = (user.bankruptcies ?? 0) + (myRank.isBankrupt ? 1 : 0);
+        const newHotels = (user.hotelsBuilt ?? 0) + (myRank.hotelsBuiltCount ?? 0);
+        
+        await updateUserStats(
+          member.id,
+          newWins,
+          newGames,
+          newLosses,
+          newLoans,
+          newProps,
+          newNetWorth,
+          newMortgages,
+          newRepossessed,
+          newAuctions,
+          newRentPaid,
+          newRentEarned,
+          newBankruptcies,
+          newHotels
+        );
+        console.log(`[gameSocket] Server auto-updated lifetime stats for player ${member.id} (${member.username})`);
+      }).catch(err => {
+        console.error(`[gameSocket] Failed to auto-update stats for ${member.id}:`, err.message);
+      });
+    }
   } catch (err) {
     console.error('[gameSocket] Failed to record completed match:', err.message);
   }
@@ -1506,6 +1554,51 @@ const mountGameSocket = (io) => {
 
     // ─── Log connection ─────────────────────────────────────────────────────
     console.log(`[socket] connected: ${socket.id}`);
+
+    // Auto-heal socket room mapping during connection handshake if query params exist
+    const handshakeRoomCode = socket.handshake.query?.roomCode;
+    const handshakePlayerId = socket.handshake.query?.playerId;
+    if (handshakeRoomCode && handshakePlayerId) {
+      const trimmedCode = (handshakeRoomCode + '').trim().toUpperCase();
+      const room = rooms.get(trimmedCode);
+      if (room) {
+        const player = findPlayerById(room, handshakePlayerId);
+        if (player) {
+          // Clear active grace timer if it exists
+          if (player._graceTimer) {
+            clearTimeout(player._graceTimer);
+            player._graceTimer = null;
+            console.log(`[socket-connect] Cleared grace timer for ${player.username} in room ${trimmedCode}`);
+          }
+          // Remove old socket mapping
+          if (player.socketId) {
+            socketToRoom.delete(player.socketId);
+          }
+          // Update socket details
+          player.socketId = socket.id;
+          player.connected = true;
+          player.disconnectedAt = null;
+          player.autoplay = false;
+          socketToRoom.set(socket.id, trimmedCode);
+          socket.join(trimmedCode);
+
+          // Update socketId in game state if game is running
+          if (room.gameState && room.gameState.players[handshakePlayerId]) {
+            room.gameState.players[handshakePlayerId].socketId = socket.id;
+            room.gameState.players[handshakePlayerId].isConnected = true;
+          }
+
+          saveRoom(room);
+          console.log(`[socket-connect] Auto-reconnected player ${player.username} to room ${trimmedCode}`);
+
+          // Notify others in room
+          socket.to(trimmedCode).emit('player-reconnected', envelope(true, {
+            playerId: handshakePlayerId,
+            username: player.username,
+          }));
+        }
+      }
+    }
 
     // =========================================================================
     // 1.  ROOM LIFECYCLE

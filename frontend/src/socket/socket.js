@@ -18,6 +18,23 @@ import { io } from 'socket.io-client';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5001';
 
+const getInitialQuery = () => {
+  const query = {};
+  try {
+    const match = window.location.pathname.match(/\/(game|lobby)\/([A-Z0-9]+)/i);
+    if (match && match[2]) {
+      query.roomCode = match[2].toUpperCase();
+    }
+    const playerId = sessionStorage.getItem('mi_playerId');
+    if (playerId) {
+      query.playerId = playerId;
+    }
+  } catch (e) {
+    console.error('[socket] Failed to compute initial query options:', e);
+  }
+  return query;
+};
+
 const socket = io(BACKEND_URL, {
   // Do not connect immediately — we connect explicitly on room create/join
   autoConnect: false,
@@ -34,6 +51,8 @@ const socket = io(BACKEND_URL, {
 
   // Timeout before a connection attempt is considered failed
   timeout: 10_000,
+
+  query: getInitialQuery(),
 });
 
 // ── Dev-mode lifecycle logging ──────────────────────────────────────────────

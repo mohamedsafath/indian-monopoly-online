@@ -20,6 +20,18 @@ import socket from '@/socket/socket';
 
 const EMIT_TIMEOUT_MS = 10_000;
 
+/**
+ * Update query parameters dynamically on the socket object.
+ * Used for auto-healing connections on reconnection handshakes.
+ */
+export const updateSocketQuery = (roomCode, playerId) => {
+  if (!socket.io.opts.query) {
+    socket.io.opts.query = {};
+  }
+  if (roomCode) socket.io.opts.query.roomCode = roomCode.toUpperCase();
+  if (playerId) socket.io.opts.query.playerId = playerId;
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
@@ -62,7 +74,14 @@ const emit = (event, payload = {}) =>
  * Create a new room. Returns { room, playerId }.
  * @param {string} username
  */
-const createRoom = (username, playerId) => emit('create-room', { username, playerId });
+const createRoom = async (username, playerId) => {
+  updateSocketQuery(null, playerId);
+  const data = await emit('create-room', { username, playerId });
+  if (data && data.room) {
+    updateSocketQuery(data.room.code, data.playerId);
+  }
+  return data;
+};
 
 /**
  * Join an existing room by code. Returns { room, playerId }.
@@ -71,8 +90,14 @@ const createRoom = (username, playerId) => emit('create-room', { username, playe
  * @param {string} playerId
  * @param {boolean} asSpectator
  */
-const joinRoom = (code, username, playerId, asSpectator = false) =>
-  emit('join-room', { code, username, playerId, asSpectator });
+const joinRoom = async (code, username, playerId, asSpectator = false) => {
+  updateSocketQuery(code, playerId);
+  const data = await emit('join-room', { code, username, playerId, asSpectator });
+  if (data) {
+    updateSocketQuery(data.room?.code || code, data.playerId);
+  }
+  return data;
+};
 
 /**
  * Voluntarily leave the current room.
@@ -84,8 +109,11 @@ const leaveRoom = () => emit('leave-room');
  * @param {string} code      — room code
  * @param {string} playerId  — the persistent player id issued on join/create
  */
-const reconnectRoom = (code, playerId) =>
-  emit('reconnect-room', { code, playerId });
+const reconnectRoom = async (code, playerId) => {
+  updateSocketQuery(code, playerId);
+  const data = await emit('reconnect-room', { code, playerId });
+  return data;
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LOBBY
@@ -184,6 +212,7 @@ const socketService = {
   // Connection
   connect:    ()  => socket.connect(),
   disconnect: ()  => socket.disconnect(),
+  updateSocketQuery,
 
   // Room
   createRoom,

@@ -147,6 +147,24 @@ export default function Home() {
     }
   });
 
+  // Sync latest user profile stats from server on mount
+  useEffect(() => {
+    if (googleUser && !googleUser.isGuest) {
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5001';
+      fetch(`${BACKEND_URL}/api/auth/profile/${googleUser.playerId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.ok && data.user) {
+            // Merge token so it's not lost
+            const updatedUser = { ...data.user, token: googleUser.token };
+            localStorage.setItem('mi_google_user', JSON.stringify(updatedUser));
+            setGoogleUser(updatedUser);
+          }
+        })
+        .catch(err => console.error("Failed to sync profile from server:", err));
+    }
+  }, []);
+
   // Create room state (pre-filled and locked)
   const [createUsername, setCreateUsername] = useState(googleUser ? googleUser.username : '');
   const [createLoading,  setCreateLoading]  = useState(false);

@@ -113,58 +113,43 @@ export default function ResultPage() {
           if (!alreadyProcessed) {
             localStorage.setItem(processedKey, 'true');
             
-            const isWinner = gameState.winnerId === myIdInGame;
-            user.games = (user.games ?? 0) + 1;
-            if (isWinner) {
-              user.wins = (user.wins ?? 0) + 1;
-            } else {
-              user.losses = (user.losses ?? 0) + 1;
-            }
-            
-            // Increment lifetime metrics from final match stats
-            user.loansTaken = (user.loansTaken ?? 0) + (myRank.loansTaken ?? 0);
-            user.propertiesPurchased = (user.propertiesPurchased ?? 0) + (myRank.propertiesPurchased ?? 0);
-            user.totalNetWorthEarned = (user.totalNetWorthEarned ?? 0) + (myRank.netWorth ?? 0);
-            user.propertiesMortgaged = (user.propertiesMortgaged ?? 0) + (myRank.propertiesMortgaged ?? 0);
-            user.propertiesRepossessed = (user.propertiesRepossessed ?? 0) + (myRank.propertiesRepossessed ?? 0);
-            user.auctionsWon = (user.auctionsWon ?? 0) + (myRank.auctionsWon ?? 0);
-            user.rentPaid = (user.rentPaid ?? 0) + (myRank.rentPaid ?? 0);
-            user.rentEarned = (user.rentEarned ?? 0) + (myRank.rentEarned ?? 0);
-            user.bankruptcies = (user.bankruptcies ?? 0) + (myRank.isBankrupt ? 1 : 0);
-            user.hotelsBuilt = (user.hotelsBuilt ?? 0) + (myRank.hotelsBuiltCount ?? 0);
-
-            // Recalculate level
-            user.level = Math.floor((user.wins ?? 0) * 0.3) + 1;
-            
-            localStorage.setItem('mi_google_user', JSON.stringify(user));
-
-            // Sync updated stats to persistent backend server database
-            if (!user.isGuest) {
-              const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5001';
-              const headers = { 'Content-Type': 'application/json' };
-              if (user.token) {
-                headers['Authorization'] = `Bearer ${user.token}`;
+            if (user.isGuest) {
+              const isWinner = gameState.winnerId === myIdInGame;
+              user.games = (user.games ?? 0) + 1;
+              if (isWinner) {
+                user.wins = (user.wins ?? 0) + 1;
+              } else {
+                user.losses = (user.losses ?? 0) + 1;
               }
-              fetch(`${BACKEND_URL}/api/auth/update-stats`, {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({
-                  playerId: user.playerId,
-                  wins: user.wins,
-                  games: user.games,
-                  losses: user.losses,
-                  loansTaken: user.loansTaken,
-                  propertiesPurchased: user.propertiesPurchased,
-                  totalNetWorthEarned: user.totalNetWorthEarned,
-                  propertiesMortgaged: user.propertiesMortgaged,
-                  propertiesRepossessed: user.propertiesRepossessed,
-                  auctionsWon: user.auctionsWon,
-                  rentPaid: user.rentPaid,
-                  rentEarned: user.rentEarned,
-                  bankruptcies: user.bankruptcies,
-                  hotelsBuilt: user.hotelsBuilt
+              
+              // Increment lifetime metrics from final match stats
+              user.loansTaken = (user.loansTaken ?? 0) + (myRank.loansTaken ?? 0);
+              user.propertiesPurchased = (user.propertiesPurchased ?? 0) + (myRank.propertiesPurchased ?? 0);
+              user.totalNetWorthEarned = (user.totalNetWorthEarned ?? 0) + (myRank.netWorth ?? 0);
+              user.propertiesMortgaged = (user.propertiesMortgaged ?? 0) + (myRank.propertiesMortgaged ?? 0);
+              user.propertiesRepossessed = (user.propertiesRepossessed ?? 0) + (myRank.propertiesRepossessed ?? 0);
+              user.auctionsWon = (user.auctionsWon ?? 0) + (myRank.auctionsWon ?? 0);
+              user.rentPaid = (user.rentPaid ?? 0) + (myRank.rentPaid ?? 0);
+              user.rentEarned = (user.rentEarned ?? 0) + (myRank.rentEarned ?? 0);
+              user.bankruptcies = (user.bankruptcies ?? 0) + (myRank.isBankrupt ? 1 : 0);
+              user.hotelsBuilt = (user.hotelsBuilt ?? 0) + (myRank.hotelsBuiltCount ?? 0);
+
+              // Recalculate level
+              user.level = Math.floor((user.wins ?? 0) * 0.3) + 1;
+              
+              localStorage.setItem('mi_google_user', JSON.stringify(user));
+            } else {
+              // Sync updated stats from persistent backend server database (which has updated them automatically)
+              const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5001';
+              fetch(`${BACKEND_URL}/api/auth/profile/${user.playerId}`)
+                .then(res => res.json())
+                .then(data => {
+                  if (data && data.ok && data.user) {
+                    const updatedUser = { ...data.user, token: user.token };
+                    localStorage.setItem('mi_google_user', JSON.stringify(updatedUser));
+                  }
                 })
-              }).catch(e => console.error("Failed to sync stats to server:", e));
+                .catch(e => console.error("Failed to sync updated stats from server:", e));
             }
           }
         }
