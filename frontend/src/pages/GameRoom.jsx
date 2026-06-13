@@ -1421,6 +1421,16 @@ export default function GameRoom() {
 
   // Memoized chat list for sidebar
   const sidebarChatMessages = useMemo(() => {
+    const isViewerSpectator = sessionStorage.getItem('mi_isSpectator') === 'true';
+    if (isViewerSpectator) {
+      return (
+        <div style={{ padding: '20px 10px', textAlign: 'center', color: '#94a3b8', fontSize: '11px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 20 }}>🔒</span>
+          <strong style={{ color: '#fbbf24' }}>Spectator Privacy Protection</strong>
+          <span style={{ opacity: 0.8 }}>Chat logs are hidden from spectators to ensure player privacy.</span>
+        </div>
+      );
+    }
     if (chatMessages.length === 0) {
       return <p className="text-xs text-center mt-4" style={{ color:'rgba(156,163,175,0.25)' }}>No messages yet</p>;
     }
@@ -1431,6 +1441,16 @@ export default function GameRoom() {
 
   // Memoized chat list for mobile tabs
   const mobileChatMessages = useMemo(() => {
+    const isViewerSpectator = sessionStorage.getItem('mi_isSpectator') === 'true';
+    if (isViewerSpectator) {
+      return (
+        <div style={{ padding: '20px 10px', textAlign: 'center', color: '#94a3b8', fontSize: '11px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 20 }}>🔒</span>
+          <strong style={{ color: '#fbbf24' }}>Spectator Privacy Protection</strong>
+          <span style={{ opacity: 0.8 }}>Chat logs are hidden from spectators to ensure player privacy.</span>
+        </div>
+      );
+    }
     if (chatMessages.length === 0) {
       return <p className="text-xs text-center mt-4" style={{ color: 'rgba(156,163,175,0.25)' }}>No messages yet</p>;
     }
@@ -2274,108 +2294,110 @@ export default function GameRoom() {
               <div ref={chatEndRef} />
             </div>
 
-            <div className="p-3 flex gap-2 flex-shrink-0 relative"
-              style={{ borderTop:'1px solid rgba(255,255,255,0.05)', alignItems: 'center', position: 'relative' }}>
-              {/* Mentions Suggestions Dropdown */}
-              {showMentionsDropdown && filteredPlayers.length > 0 && (
-                <div className="absolute bottom-12 left-0 right-0 p-1.5 rounded-xl flex flex-col gap-1 z-30 backdrop-blur-md animate-fade-in"
-                     style={{
-                       background: 'rgba(15,10,5,0.95)',
-                       border: '1.5px solid rgba(212,175,55,0.35)',
-                       boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-                       maxHeight: '140px',
-                       overflowY: 'auto'
-                     }}>
-                  {filteredPlayers.map(p => (
-                    <button
-                      key={p.id}
-                      onClick={() => selectMention(p)}
-                      className="w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-300 hover:bg-yellow-500/10 hover:text-yellow-500 transition-colors duration-150 cursor-pointer"
-                      style={{ fontFamily: "'DM Sans', sans-serif" }}
-                    >
-                      👤 @{p.username}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* Emoji Reaction Drawer */}
-              {showEmojiPicker && (
-                <div className="absolute bottom-12 left-0 right-0 p-2 rounded-xl flex gap-2 justify-around z-20 backdrop-blur-md animate-fade-in"
-                     style={{
-                       background: 'rgba(15,10,5,0.95)',
-                       border: '1.5px solid rgba(212,175,55,0.3)',
-                       boxShadow: '0 8px 32px rgba(0,0,0,0.6)'
-                     }}>
-                  {QUICK_EMOJIS.map(emoji => (
-                    <button
-                      key={emoji}
-                      onClick={() => {
-                        setChatInput(prev => prev + emoji);
-                        setShowEmojiPicker(false);
-                      }}
-                      className="text-base hover:scale-125 transition-transform duration-150 cursor-pointer p-0.5"
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {isRecording ? (
-                <div className="flex-grow flex items-center justify-between px-3 py-2 rounded-lg text-[10px] font-semibold"
-                     style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5', animation: 'recPulseGame 2s infinite ease-in-out' }}>
-                  <style>{`
-                    @keyframes recPulseGame {
-                      0%, 100% { border-color: rgba(239,68,68,0.3); background: rgba(239,68,68,0.08); }
-                      50% { border-color: rgba(239,68,68,0.6); background: rgba(239,68,68,0.16); }
-                    }
-                  `}</style>
-                  <span>🔴 Recording: 0:{recDuration.toString().padStart(2, '0')} / 0:12</span>
-                  <button onClick={stopRecording}
-                          className="px-2 py-0.5 rounded bg-red-600 hover:bg-red-700 text-white font-bold cursor-pointer text-[8px] uppercase tracking-wider transition-all">
-                    Stop ⏹️
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <div className="relative flex-1 flex items-center min-w-0">
-                    <input
-                      value={chatInput}
-                      onChange={e => handleChatInputChange(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') handleChat(); }}
-                      placeholder="Type @name..."
-                      maxLength={300}
-                      className="w-full pl-3 pr-14 py-1.5 rounded-lg text-xs outline-none"
-                      style={{ background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', color:'#f3f4f6', caretColor:'#f59e0b' }}
-                    />
-                    <div className="absolute right-1 flex items-center gap-0.5">
+            {sessionStorage.getItem('mi_isSpectator') !== 'true' && (
+              <div className="p-3 flex gap-2 flex-shrink-0 relative"
+                style={{ borderTop:'1px solid rgba(255,255,255,0.05)', alignItems: 'center', position: 'relative' }}>
+                {/* Mentions Suggestions Dropdown */}
+                {showMentionsDropdown && filteredPlayers.length > 0 && (
+                  <div className="absolute bottom-12 left-0 right-0 p-1.5 rounded-xl flex flex-col gap-1 z-30 backdrop-blur-md animate-fade-in"
+                       style={{
+                         background: 'rgba(15,10,5,0.95)',
+                         border: '1.5px solid rgba(212,175,55,0.35)',
+                         boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+                         maxHeight: '140px',
+                         overflowY: 'auto'
+                       }}>
+                    {filteredPlayers.map(p => (
                       <button
-                        onClick={() => { setShowEmojiPicker(!showEmojiPicker); setShowMentionsDropdown(false); }}
-                        className="p-1 text-sm cursor-pointer hover:bg-white/10 rounded transition-all"
-                        style={{ border: 'none', background: 'transparent' }}
-                        title="Insert emoji"
+                        key={p.id}
+                        onClick={() => selectMention(p)}
+                        className="w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-300 hover:bg-yellow-500/10 hover:text-yellow-500 transition-colors duration-150 cursor-pointer"
+                        style={{ fontFamily: "'DM Sans', sans-serif" }}
                       >
-                        😀
+                        👤 @{p.username}
                       </button>
-                      <button
-                        onClick={startRecording}
-                        className="p-1 text-sm cursor-pointer hover:bg-white/10 rounded transition-all"
-                        style={{ border: 'none', background: 'transparent' }}
-                        title="Record voice message"
-                      >
-                        🎙️
-                      </button>
-                    </div>
+                    ))}
                   </div>
-                  <button onClick={handleChat}
-                    className="px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-all flex-shrink-0"
-                    style={{ background:'rgba(245,158,11,0.1)', color:'#f59e0b', border:'1px solid rgba(245,158,11,0.18)' }}>
-                    ↑
-                  </button>
-                </>
-              )}
-            </div>
+                )}
+
+                {/* Emoji Reaction Drawer */}
+                {showEmojiPicker && (
+                  <div className="absolute bottom-12 left-0 right-0 p-2 rounded-xl flex gap-2 justify-around z-20 backdrop-blur-md animate-fade-in"
+                       style={{
+                         background: 'rgba(15,10,5,0.95)',
+                         border: '1.5px solid rgba(212,175,55,0.3)',
+                         boxShadow: '0 8px 32px rgba(0,0,0,0.6)'
+                       }}>
+                    {QUICK_EMOJIS.map(emoji => (
+                      <button
+                        key={emoji}
+                        onClick={() => {
+                          setChatInput(prev => prev + emoji);
+                          setShowEmojiPicker(false);
+                        }}
+                        className="text-base hover:scale-125 transition-transform duration-150 cursor-pointer p-0.5"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {isRecording ? (
+                  <div className="flex-grow flex items-center justify-between px-3 py-2 rounded-lg text-[10px] font-semibold"
+                       style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5', animation: 'recPulseGame 2s infinite ease-in-out' }}>
+                    <style>{`
+                      @keyframes recPulseGame {
+                        0%, 100% { border-color: rgba(239,68,68,0.3); background: rgba(239,68,68,0.08); }
+                        50% { border-color: rgba(239,68,68,0.6); background: rgba(239,68,68,0.16); }
+                      }
+                    `}</style>
+                    <span>🔴 Recording: 0:{recDuration.toString().padStart(2, '0')} / 0:12</span>
+                    <button onClick={stopRecording}
+                            className="px-2 py-0.5 rounded bg-red-600 hover:bg-red-700 text-white font-bold cursor-pointer text-[8px] uppercase tracking-wider transition-all">
+                      Stop ⏹️
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="relative flex-1 flex items-center min-w-0">
+                      <input
+                        value={chatInput}
+                        onChange={e => handleChatInputChange(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleChat(); }}
+                        placeholder="Type @name..."
+                        maxLength={300}
+                        className="w-full pl-3 pr-14 py-1.5 rounded-lg text-xs outline-none"
+                        style={{ background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', color:'#f3f4f6', caretColor:'#f59e0b' }}
+                      />
+                      <div className="absolute right-1 flex items-center gap-0.5">
+                        <button
+                          onClick={() => { setShowEmojiPicker(!showEmojiPicker); setShowMentionsDropdown(false); }}
+                          className="p-1 text-sm cursor-pointer hover:bg-white/10 rounded transition-all"
+                          style={{ border: 'none', background: 'transparent' }}
+                          title="Insert emoji"
+                        >
+                          😀
+                        </button>
+                        <button
+                          onClick={startRecording}
+                          className="p-1 text-sm cursor-pointer hover:bg-white/10 rounded transition-all"
+                          style={{ border: 'none', background: 'transparent' }}
+                          title="Record voice message"
+                        >
+                          🎙️
+                        </button>
+                      </div>
+                    </div>
+                    <button onClick={handleChat}
+                      className="px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-all flex-shrink-0"
+                      style={{ background:'rgba(245,158,11,0.1)', color:'#f59e0b', border:'1px solid rgba(245,158,11,0.18)' }}>
+                      ↑
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           {/* My Properties Container */}
@@ -2724,101 +2746,103 @@ export default function GameRoom() {
                 </div>
 
                 {/* Chat Input */}
-                <div className="p-2 flex gap-2 flex-shrink-0 relative" style={{ borderTop: '1px solid rgba(255,255,255,0.05)', alignItems: 'center', position: 'relative' }}>
-                  {/* Mentions Suggestions Dropdown */}
-                  {showMentionsDropdown && filteredPlayers.length > 0 && (
-                    <div className="absolute bottom-12 left-0 right-0 p-1.5 rounded-xl flex flex-col gap-1 z-30 backdrop-blur-md animate-fade-in"
-                         style={{
-                           background: 'rgba(15,10,5,0.95)',
-                           border: '1.5px solid rgba(212,175,55,0.35)',
-                           boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-                           maxHeight: '140px',
-                           overflowY: 'auto'
-                         }}>
-                      {filteredPlayers.map(p => (
-                        <button
-                          key={p.id}
-                          onClick={() => selectMention(p)}
-                          className="w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-300 hover:bg-yellow-500/10 hover:text-yellow-500 transition-colors duration-150 cursor-pointer"
-                          style={{ fontFamily: "'DM Sans', sans-serif" }}
-                        >
-                          👤 @{p.username}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Emoji Reaction Drawer */}
-                  {showEmojiPicker && (
-                    <div className="absolute bottom-12 left-0 right-0 p-2 rounded-xl flex gap-2 justify-around z-20 backdrop-blur-md animate-fade-in"
-                         style={{
-                           background: 'rgba(15,10,5,0.95)',
-                           border: '1.5px solid rgba(212,175,55,0.3)',
-                           boxShadow: '0 8px 32px rgba(0,0,0,0.6)'
-                         }}>
-                      {QUICK_EMOJIS.map(emoji => (
-                        <button
-                          key={emoji}
-                          onClick={() => {
-                            setChatInput(prev => prev + emoji);
-                            setShowEmojiPicker(false);
-                          }}
-                          className="text-base hover:scale-125 transition-transform duration-150 cursor-pointer p-0.5"
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {isRecording ? (
-                    <div className="flex-grow flex items-center justify-between px-3 py-1.5 rounded-lg text-[10px] font-semibold"
-                         style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5' }}>
-                      <span>🔴 Recording: 0:{recDuration.toString().padStart(2, '0')}</span>
-                      <button onClick={stopRecording}
-                              className="px-2 py-0.5 rounded bg-red-600 hover:bg-red-700 text-white font-bold cursor-pointer text-[8px] uppercase tracking-wider transition-all">
-                        Stop ⏹️
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="relative flex-1 flex items-center min-w-0">
-                        <input
-                          value={chatInput}
-                          onChange={e => handleChatInputChange(e.target.value)}
-                          onKeyDown={e => { if (e.key === 'Enter') handleChat(); }}
-                          placeholder="Type @name..."
-                          maxLength={300}
-                          className="w-full pl-3 pr-14 py-1.5 rounded-lg text-xs outline-none"
-                          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#f3f4f6' }}
-                        />
-                        <div className="absolute right-1 flex items-center gap-0.5">
+                {sessionStorage.getItem('mi_isSpectator') !== 'true' && (
+                  <div className="p-2 flex gap-2 flex-shrink-0 relative" style={{ borderTop: '1px solid rgba(255,255,255,0.05)', alignItems: 'center', position: 'relative' }}>
+                    {/* Mentions Suggestions Dropdown */}
+                    {showMentionsDropdown && filteredPlayers.length > 0 && (
+                      <div className="absolute bottom-12 left-0 right-0 p-1.5 rounded-xl flex flex-col gap-1 z-30 backdrop-blur-md animate-fade-in"
+                           style={{
+                             background: 'rgba(15,10,5,0.95)',
+                             border: '1.5px solid rgba(212,175,55,0.35)',
+                             boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+                             maxHeight: '140px',
+                             overflowY: 'auto'
+                           }}>
+                        {filteredPlayers.map(p => (
                           <button
-                            onClick={() => { setShowEmojiPicker(!showEmojiPicker); setShowMentionsDropdown(false); }}
-                            className="p-1 text-sm cursor-pointer hover:bg-white/10 rounded transition-all"
-                            style={{ border: 'none', background: 'transparent' }}
-                            title="Insert emoji"
+                            key={p.id}
+                            onClick={() => selectMention(p)}
+                            className="w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-300 hover:bg-yellow-500/10 hover:text-yellow-500 transition-colors duration-150 cursor-pointer"
+                            style={{ fontFamily: "'DM Sans', sans-serif" }}
                           >
-                            😀
+                            👤 @{p.username}
                           </button>
-                          <button
-                            onClick={startRecording}
-                            className="p-1 text-sm cursor-pointer hover:bg-white/10 rounded transition-all"
-                            style={{ border: 'none', background: 'transparent' }}
-                            title="Record voice message"
-                          >
-                            🎙️
-                          </button>
-                        </div>
+                        ))}
                       </div>
-                      <button onClick={handleChat}
-                        className="px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-all flex-shrink-0"
-                        style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.18)' }}>
-                        ↑
-                      </button>
-                    </>
-                  )}
-                </div>
+                    )}
+
+                    {/* Emoji Reaction Drawer */}
+                    {showEmojiPicker && (
+                      <div className="absolute bottom-12 left-0 right-0 p-2 rounded-xl flex gap-2 justify-around z-20 backdrop-blur-md animate-fade-in"
+                           style={{
+                             background: 'rgba(15,10,5,0.95)',
+                             border: '1.5px solid rgba(212,175,55,0.3)',
+                             boxShadow: '0 8px 32px rgba(0,0,0,0.6)'
+                           }}>
+                        {QUICK_EMOJIS.map(emoji => (
+                          <button
+                            key={emoji}
+                            onClick={() => {
+                              setChatInput(prev => prev + emoji);
+                              setShowEmojiPicker(false);
+                            }}
+                            className="text-base hover:scale-125 transition-transform duration-150 cursor-pointer p-0.5"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {isRecording ? (
+                      <div className="flex-grow flex items-center justify-between px-3 py-1.5 rounded-lg text-[10px] font-semibold"
+                           style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5' }}>
+                        <span>🔴 Recording: 0:{recDuration.toString().padStart(2, '0')}</span>
+                        <button onClick={stopRecording}
+                                className="px-2 py-0.5 rounded bg-red-600 hover:bg-red-700 text-white font-bold cursor-pointer text-[8px] uppercase tracking-wider transition-all">
+                          Stop ⏹️
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="relative flex-1 flex items-center min-w-0">
+                          <input
+                            value={chatInput}
+                            onChange={e => handleChatInputChange(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') handleChat(); }}
+                            placeholder="Type @name..."
+                            maxLength={300}
+                            className="w-full pl-3 pr-14 py-1.5 rounded-lg text-xs outline-none"
+                            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#f3f4f6' }}
+                          />
+                          <div className="absolute right-1 flex items-center gap-0.5">
+                            <button
+                              onClick={() => { setShowEmojiPicker(!showEmojiPicker); setShowMentionsDropdown(false); }}
+                              className="p-1 text-sm cursor-pointer hover:bg-white/10 rounded transition-all"
+                              style={{ border: 'none', background: 'transparent' }}
+                              title="Insert emoji"
+                            >
+                              😀
+                            </button>
+                            <button
+                              onClick={startRecording}
+                              className="p-1 text-sm cursor-pointer hover:bg-white/10 rounded transition-all"
+                              style={{ border: 'none', background: 'transparent' }}
+                              title="Record voice message"
+                            >
+                              🎙️
+                            </button>
+                          </div>
+                        </div>
+                        <button onClick={handleChat}
+                          className="px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-all flex-shrink-0"
+                          style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.18)' }}>
+                          ↑
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
