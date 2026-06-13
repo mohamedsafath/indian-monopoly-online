@@ -326,5 +326,6 @@ module.exports = {
   updateUserStats,
   isAdmin,
   getAllRegisteredUsers,
-  updateAvatar
+  updateAvatar,
+  getIsDbActive
 };
