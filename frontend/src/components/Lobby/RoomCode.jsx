@@ -13,7 +13,7 @@ export default function RoomCode({ code = '' }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
-    const lobbyLink = `${window.location.origin}/game/${code}?join=true`;
+    const lobbyLink = `${window.location.origin}/lobby/${code}`;
     try {
       await navigator.clipboard.writeText(lobbyLink);
       setCopied(true);
