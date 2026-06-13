@@ -28,6 +28,8 @@ const UserSchema = new mongoose.Schema({
   rentEarned: { type: Number, default: 0 },
   bankruptcies: { type: Number, default: 0 },
   hotelsBuilt: { type: Number, default: 0 },
+  isBanned: { type: Boolean, default: false },
+  banReason: { type: String, default: '' },
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -143,7 +145,9 @@ const registerUser = async (username, email) => {
     rentPaid: 0,
     rentEarned: 0,
     bankruptcies: 0,
-    hotelsBuilt: 0
+    hotelsBuilt: 0,
+    isBanned: false,
+    banReason: ''
   };
 
   const dbActive = getIsDbActive();

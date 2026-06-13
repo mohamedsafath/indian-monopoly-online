@@ -147,6 +147,10 @@ authRouter.post("/google-login", async (req, res) => {
       const nameCapitalized = defaultName.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
       user = await registerUser(nameCapitalized, targetEmail);
     }
+
+    if (user && user.isBanned) {
+      return res.status(403).json({ ok: false, error: user.banReason || "Your account has been suspended by the administrator." });
+    }
     
     // Auto-sync real Google avatar image if user has default avatar
     if (picture && (!user.avatar || user.avatar.includes("dicebear.com"))) {
@@ -317,6 +321,7 @@ adminRouter.get("/metrics", verifyAdmin, async (req, res) => {
     let onlinePlayersCount = 0;
     let playingPlayersCount = 0;
     
+    const { BOARD_TILES } = require("./game-engine/boardData");
     for (const room of rooms.values()) {
       const isPlaying = room.status === 'playing' || (room.gameState && room.gameState.status === 'playing');
       if (isPlaying) {
@@ -333,13 +338,50 @@ adminRouter.get("/metrics", verifyAdmin, async (req, res) => {
         playingPlayersCount += humanPlayers.length;
       }
       
+      const playersDetails = [];
+      if (room.gameState) {
+        Object.values(room.gameState.players).forEach(p => {
+          const ownedTileNames = [];
+          for (const tile of BOARD_TILES) {
+            const propState = room.gameState.properties[tile.id];
+            if (propState && propState.ownerId === p.id && !propState.mortgaged) {
+              ownedTileNames.push(tile.name);
+            }
+          }
+          const roomPlayer = room.players.find(rp => rp.id === p.id);
+          playersDetails.push({
+            id: p.id,
+            username: p.username,
+            money: p.money,
+            isBot: p.isBot || false,
+            autoplay: roomPlayer?.autoplay || false,
+            isConnected: roomPlayer?.connected !== false,
+            properties: ownedTileNames
+          });
+        });
+      } else {
+        room.players.forEach(p => {
+          playersDetails.push({
+            id: p.id,
+            username: p.username,
+            isBot: p.isBot || false,
+            autoplay: p.autoplay || false,
+            isConnected: p.connected !== false,
+            properties: []
+          });
+        });
+      }
+
       activeRooms.push({
         code: room.code,
         status: isPlaying ? 'playing' : 'lobby',
         host: room.players.find(p => p.id === room.hostId)?.username || 'System',
         playerCount: room.players.length,
         spectatorCount: (room.spectators || []).length,
-        createdAt: room.createdAt || Date.now()
+        createdAt: room.createdAt || Date.now(),
+        players: playersDetails,
+        currentTurnPlayerId: room.gameState?.currentPlayerId || null,
+        currentTurnPlayerName: room.gameState?.players[room.gameState.currentPlayerId]?.username || null
       });
     }
 
@@ -402,6 +444,128 @@ adminRouter.post("/force-close", verifyAdmin, async (req, res) => {
     destroyRoom(io, room);
     console.log(`[admin] Force closed room ${targetCode}`);
     res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Admin toggle autoplay (bot takeover) endpoint
+adminRouter.post("/toggle-autoplay", verifyAdmin, async (req, res) => {
+  try {
+    const { roomCode, playerId, autoplay } = req.body;
+    if (!roomCode || !playerId) {
+      return res.status(400).json({ ok: false, error: "Missing roomCode or playerId." });
+    }
+    const targetCode = String(roomCode).toUpperCase();
+    const room = rooms.get(targetCode);
+    if (!room) {
+      return res.status(404).json({ ok: false, error: `Active room ${targetCode} not found.` });
+    }
+    const player = room.players.find(p => p.id === playerId);
+    if (!player) {
+      return res.status(404).json({ ok: false, error: `Player ${playerId} not found in room ${targetCode}.` });
+    }
+    
+    const isAutoplay = Boolean(autoplay);
+    player.autoplay = isAutoplay;
+    
+    if (room.gameState && room.gameState.players[playerId]) {
+      room.gameState.players[playerId].autoplay = isAutoplay;
+    }
+    
+    const { triggerBotCycle, broadcastGameState } = require("./socket/gameSocket");
+    triggerBotCycle(io, room);
+    broadcastGameState(io, room);
+
+    console.log(`[admin] Toggled autoplay to ${isAutoplay} for player ${player.username} in room ${targetCode}`);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Admin edit user stats endpoint
+adminRouter.post("/edit-stats", verifyAdmin, async (req, res) => {
+  try {
+    const { playerId, wins, games, level, totalNetWorthEarned } = req.body;
+    if (!playerId) {
+      return res.status(400).json({ ok: false, error: "playerId is required" });
+    }
+    
+    const { User, inMemoryUsers, saveMemoryUsersToFile, getIsDbActive } = require("./socket/userModel");
+    
+    const updates = {};
+    if (wins !== undefined) updates.wins = Number(wins);
+    if (games !== undefined) updates.games = Number(games);
+    if (level !== undefined) updates.level = Number(level);
+    if (totalNetWorthEarned !== undefined) updates.totalNetWorthEarned = Number(totalNetWorthEarned);
+    
+    const dbActive = getIsDbActive();
+    if (dbActive) {
+      const updated = await User.findOneAndUpdate({ playerId }, updates, { new: true }).lean();
+      if (!updated) {
+        return res.status(404).json({ ok: false, error: "User not found" });
+      }
+      res.json({ ok: true, player: updated });
+    } else {
+      let found = null;
+      for (const [email, u] of inMemoryUsers.entries()) {
+        if (u.playerId === playerId) {
+          const updated = { ...u, ...updates };
+          inMemoryUsers.set(email, updated);
+          found = updated;
+          break;
+        }
+      }
+      if (!found) {
+        return res.status(404).json({ ok: false, error: "User not found in memory" });
+      }
+      saveMemoryUsersToFile();
+      res.json({ ok: true, player: found });
+    }
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Admin toggle user ban/suspension endpoint
+adminRouter.post("/toggle-ban", verifyAdmin, async (req, res) => {
+  try {
+    const { playerId, isBanned, banReason } = req.body;
+    if (!playerId) {
+      return res.status(400).json({ ok: false, error: "playerId is required" });
+    }
+    
+    const { User, inMemoryUsers, saveMemoryUsersToFile, getIsDbActive } = require("./socket/userModel");
+    
+    const updates = {
+      isBanned: Boolean(isBanned),
+      banReason: banReason || ""
+    };
+    
+    const dbActive = getIsDbActive();
+    if (dbActive) {
+      const updated = await User.findOneAndUpdate({ playerId }, updates, { new: true }).lean();
+      if (!updated) {
+        return res.status(404).json({ ok: false, error: "User not found" });
+      }
+      res.json({ ok: true, player: updated });
+    } else {
+      let found = null;
+      for (const [email, u] of inMemoryUsers.entries()) {
+        if (u.playerId === playerId) {
+          const updated = { ...u, ...updates };
+          inMemoryUsers.set(email, updated);
+          found = updated;
+          break;
+        }
+      }
+      if (!found) {
+        return res.status(404).json({ ok: false, error: "User not found in memory" });
+      }
+      saveMemoryUsersToFile();
+      res.json({ ok: true, player: found });
+    }
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

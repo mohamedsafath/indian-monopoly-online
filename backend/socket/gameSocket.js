@@ -1651,7 +1651,7 @@ const mountGameSocket = (io) => {
      * Client payload: { username: string }
      * Ack:            { ok, data: { room: lobbySnapshot, playerId: string } }
      */
-   socket.on('create-room', ({ username, playerId: clientPlayerId } = {}, ack) => {
+   socket.on('create-room', async ({ username, playerId: clientPlayerId } = {}, ack) => {
   console.log('🔥 create-room event received');
 
   if (!username || typeof username !== 'string' || !username.trim()) {
@@ -1659,9 +1659,17 @@ const mountGameSocket = (io) => {
     return ackError(ack, 'username is required');
   }
 
+  const playerId = clientPlayerId || socket.id;
+
+  // Validate player is not banned
+  const { findUserById } = require('./userModel');
+  const dbUser = await findUserById(playerId);
+  if (dbUser && dbUser.isBanned) {
+    return ackError(ack, dbUser.banReason || 'Your profile has been suspended by the administrator.');
+  }
+
   const trimmed = username.trim().slice(0, 20);
   const code = uniqueRoomCode();
-  const playerId = clientPlayerId || socket.id;
 
   const room = {
     code,
@@ -1706,11 +1714,20 @@ const mountGameSocket = (io) => {
      * Ack:            { ok, data: { room, playerId } }
      * Broadcast:      'player-joined' → room
      */
-    socket.on('join-room', ({ code, username, playerId: clientPlayerId, asSpectator } = {}, ack) => {
+    socket.on('join-room', async ({ code, username, playerId: clientPlayerId, asSpectator } = {}, ack) => {
       console.log('🔥 join-room event received', { asSpectator });
 
       if (!code || !username) {
         return ackError(ack, 'code and username are required');
+      }
+
+      const playerId = clientPlayerId || socket.id;
+
+      // Validate player is not banned
+      const { findUserById } = require('./userModel');
+      const dbUser = await findUserById(playerId);
+      if (dbUser && dbUser.isBanned) {
+        return ackError(ack, dbUser.banReason || 'Your profile has been suspended by the administrator.');
       }
 
       const trimmedCode = String(code).trim().toUpperCase();

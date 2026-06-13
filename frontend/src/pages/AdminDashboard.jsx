@@ -70,6 +70,18 @@ export default function AdminDashboard() {
   // Force close state
   const [actionLoading, setActionLoading] = useState(null);
 
+  // Moderation state variables
+  const [editingPlayer, setEditingPlayer] = useState(null);
+  const [editWins, setEditWins] = useState(0);
+  const [editGames, setEditGames] = useState(0);
+  const [editLevel, setEditLevel] = useState(1);
+  const [editNetWorth, setEditNetWorth] = useState(0);
+  const [editSaving, setEditSaving] = useState(false);
+
+  const [banningPlayer, setBanningPlayer] = useState(null);
+  const [banReasonText, setBanReasonText] = useState('');
+  const [banSaving, setBanSaving] = useState(false);
+
   // Quick broadcasts suggestions
   const QUICK_ALERTS = [
     "Server restarting for system updates in 5 minutes.",
@@ -242,6 +254,108 @@ export default function AdminDashboard() {
       alert(`Error closing room: ${err.message}`);
     } finally {
       setActionLoading(null);
+    }
+  };
+
+  // Handle editing user stats
+  const handleEditStatsSubmit = async (e) => {
+    e.preventDefault();
+    if (!editingPlayer) return;
+    setEditSaving(true);
+    try {
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5001';
+      const res = await fetch(`${BACKEND_URL}/api/admin/edit-stats`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-secret': import.meta.env.VITE_ADMIN_SECRET || 'SafathSruthiAdminSecret2026!'
+        },
+        body: JSON.stringify({
+          playerId: editingPlayer.playerId,
+          wins: Number(editWins),
+          games: Number(editGames),
+          level: Number(editLevel),
+          totalNetWorthEarned: Number(editNetWorth)
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update player stats');
+      
+      // Update local state list
+      setPlayers(prev => prev.map(p => p.playerId === editingPlayer.playerId ? { 
+        ...p, 
+        wins: Number(editWins), 
+        games: Number(editGames), 
+        level: Number(editLevel), 
+        totalNetWorthEarned: Number(editNetWorth) 
+      } : p));
+      
+      setEditingPlayer(null);
+    } catch (err) {
+      alert(`Error updating stats: ${err.message}`);
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  // Handle toggling ban status
+  const handleToggleBanSubmit = async (isBannedVal) => {
+    if (!banningPlayer) return;
+    setBanSaving(true);
+    try {
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5001';
+      const res = await fetch(`${BACKEND_URL}/api/admin/toggle-ban`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-secret': import.meta.env.VITE_ADMIN_SECRET || 'SafathSruthiAdminSecret2026!'
+        },
+        body: JSON.stringify({
+          playerId: banningPlayer.playerId,
+          isBanned: isBannedVal,
+          banReason: isBannedVal ? banReasonText : ''
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to toggle ban status');
+      
+      // Update local state list
+      setPlayers(prev => prev.map(p => p.playerId === banningPlayer.playerId ? { 
+        ...p, 
+        isBanned: isBannedVal, 
+        banReason: isBannedVal ? banReasonText : '' 
+      } : p));
+      
+      setBanningPlayer(null);
+      setBanReasonText('');
+    } catch (err) {
+      alert(`Error: ${err.message}`);
+    } finally {
+      setBanSaving(false);
+    }
+  };
+
+  // Handle toggling autoplay / replacing with bot
+  const handleToggleAutoplay = async (roomCode, playerId, currentAutoplay) => {
+    try {
+      const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5001';
+      const res = await fetch(`${BACKEND_URL}/api/admin/toggle-autoplay`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-secret': import.meta.env.VITE_ADMIN_SECRET || 'SafathSruthiAdminSecret2026!'
+        },
+        body: JSON.stringify({
+          roomCode,
+          playerId,
+          autoplay: !currentAutoplay
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to toggle bot takeover');
+      await fetchMetrics(false);
+    } catch (err) {
+      alert(`Error toggling bot takeover: ${err.message}`);
     }
   };
 
@@ -800,6 +914,127 @@ export default function AdminDashboard() {
                             </span>
                           </div>
                         </div>
+
+                        {/* Live Player Information */}
+                        {room.players && room.players.length > 0 && (
+                          <div style={{
+                            marginTop: 16,
+                            borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+                            paddingTop: 12,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 10
+                          }}>
+                            <span style={{ fontSize: 11, color: '#fbbf24', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                              👥 Live Players status:
+                            </span>
+                            {room.players.map(p => {
+                              const isTurn = room.currentTurnPlayerId === p.id;
+                              return (
+                                <div key={p.id} style={{
+                                  background: 'rgba(0, 0, 0, 0.2)',
+                                  padding: '8px 12px',
+                                  borderRadius: 8,
+                                  border: isTurn ? '1.5px solid rgba(212, 175, 55, 0.6)' : '1px solid rgba(255, 255, 255, 0.04)',
+                                  boxShadow: isTurn ? '0 0 10px rgba(212, 175, 55, 0.15)' : 'none'
+                                }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                      <span style={{
+                                        width: 8,
+                                        height: 8,
+                                        borderRadius: '50%',
+                                        background: p.isConnected ? '#10b981' : '#ef4444',
+                                        display: 'inline-block'
+                                      }} title={p.isConnected ? 'Connected' : 'Disconnected (AFK)'} />
+                                      <span style={{ fontWeight: 700, color: '#fff', fontSize: 12 }}>
+                                        {p.username}
+                                      </span>
+                                      {isTurn && (
+                                        <span style={{
+                                          fontSize: 9,
+                                          background: 'rgba(217, 119, 6, 0.2)',
+                                          color: '#fbbf24',
+                                          padding: '1px 5px',
+                                          borderRadius: 4,
+                                          fontWeight: 800,
+                                          border: '1px solid rgba(217, 119, 6, 0.4)'
+                                        }}>
+                                          TURN 🎲
+                                        </span>
+                                      )}
+                                      {p.isBot && (
+                                        <span style={{
+                                          fontSize: 9,
+                                          background: 'rgba(99, 102, 241, 0.2)',
+                                          color: '#818cf8',
+                                          padding: '1px 5px',
+                                          borderRadius: 4,
+                                          fontWeight: 800,
+                                          border: '1px solid rgba(99, 102, 241, 0.4)'
+                                        }}>
+                                          BOT 🤖
+                                        </span>
+                                      )}
+                                      {p.autoplay && !p.isBot && (
+                                        <span style={{
+                                          fontSize: 9,
+                                          background: 'rgba(16, 185, 129, 0.2)',
+                                          color: '#34d399',
+                                          padding: '1px 5px',
+                                          borderRadius: 4,
+                                          fontWeight: 800,
+                                          border: '1px solid rgba(16, 185, 129, 0.4)'
+                                        }}>
+                                          AUTOPLAY 🔄
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span style={{ color: '#34d399', fontWeight: 800, fontSize: 12 }}>
+                                      ₹{p.money !== undefined ? p.money.toLocaleString('en-IN') : '1,500'}
+                                    </span>
+                                  </div>
+
+                                  {/* Properties list */}
+                                  {p.properties && p.properties.length > 0 && (
+                                    <div style={{ margin: '4px 0', fontSize: 10, color: '#cbd5e1' }}>
+                                      <strong style={{ color: '#d4af37' }}>Properties: </strong>
+                                      {p.properties.join(', ')}
+                                    </div>
+                                  )}
+
+                                  {/* Auto/Replace control button */}
+                                  {!p.isBot && (
+                                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+                                      <button
+                                        onClick={() => handleToggleAutoplay(room.code, p.id, p.autoplay)}
+                                        style={{
+                                          padding: '3px 8px',
+                                          borderRadius: 6,
+                                          background: p.autoplay ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                                          border: p.autoplay ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)',
+                                          color: p.autoplay ? '#f87171' : '#34d399',
+                                          fontSize: 10,
+                                          fontWeight: 700,
+                                          cursor: 'pointer',
+                                          transition: 'all 0.15s'
+                                        }}
+                                        onMouseEnter={e => {
+                                          e.currentTarget.style.background = p.autoplay ? 'rgba(239, 68, 68, 0.25)' : 'rgba(16, 185, 129, 0.25)';
+                                        }}
+                                        onMouseLeave={e => {
+                                          e.currentTarget.style.background = p.autoplay ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)';
+                                        }}
+                                      >
+                                        {p.autoplay ? '🙋 Takeback Control' : '🤖 Replace with Bot'}
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
 
                       {/* Control buttons */}
@@ -918,19 +1153,26 @@ export default function AdminDashboard() {
                               alt=""
                               style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }}
                             />
-                            <span style={{ fontWeight: 700, color: '#fff' }}>{player.username}</span>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <span style={{ fontWeight: 700, color: '#fff' }}>{player.username}</span>
+                              {player.isBanned && (
+                                <span style={{ fontSize: 10, color: '#f87171', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                                  🚫 Banned {player.banReason ? `(${player.banReason})` : ''}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td style={{ padding: '12px 16px', color: '#94a3b8' }}>{player.email}</td>
                           <td style={{ padding: '12px 16px', textAlign: 'center' }}>
                             <span style={{
-                              background: 'rgba(212,175,55,0.15)',
-                              border: '1.5px solid #d4af37',
-                              color: '#fbbf24',
-                              padding: '2px 8px',
-                              borderRadius: 12,
-                              fontSize: 10,
-                              fontWeight: 800
-                            }}>
+                                background: 'rgba(212,175,55,0.15)',
+                                border: '1.5px solid #d4af37',
+                                color: '#fbbf24',
+                                padding: '2px 8px',
+                                borderRadius: 12,
+                                fontSize: 10,
+                                fontWeight: 800
+                              }}>
                               Lvl {player.level || 1}
                             </span>
                           </td>
@@ -943,11 +1185,11 @@ export default function AdminDashboard() {
                           <td style={{ padding: '12px 16px', color: '#cbd5e1', fontWeight: 700 }}>
                             ₹{(player.totalNetWorthEarned || 0).toLocaleString('en-IN')}
                           </td>
-                          <td style={{ padding: '12px 16px' }}>
+                          <td style={{ padding: '12px 16px', display: 'flex', gap: 6 }}>
                             <button
                               onClick={() => navigate(`/profile/${player.playerId}`)}
                               style={{
-                                padding: '4px 10px',
+                                padding: '6px 10px',
                                 borderRadius: 6,
                                 background: 'rgba(255,255,255,0.03)',
                                 border: '1px solid rgba(255,255,255,0.1)',
@@ -960,6 +1202,55 @@ export default function AdminDashboard() {
                               onMouseLeave={e => e.currentTarget.style.border = '1px solid rgba(255,255,255,0.1)'}
                             >
                               Profile
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                setEditingPlayer(player);
+                                setEditWins(player.wins || 0);
+                                setEditGames(player.games || 0);
+                                setEditLevel(player.level || 1);
+                                setEditNetWorth(player.totalNetWorthEarned || 0);
+                              }}
+                              style={{
+                                padding: '6px 10px',
+                                borderRadius: 6,
+                                background: 'rgba(212,175,55,0.1)',
+                                border: '1px solid rgba(212,175,55,0.3)',
+                                color: '#fbbf24',
+                                fontSize: 11,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.background = 'rgba(212, 175, 55, 0.2)'}
+                              onMouseLeave={e => e.currentTarget.style.background = 'rgba(212, 175, 55, 0.1)'}
+                            >
+                              ✏️ Edit Stats
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                setBanningPlayer(player);
+                                setBanReasonText(player.banReason || '');
+                              }}
+                              style={{
+                                padding: '6px 10px',
+                                borderRadius: 6,
+                                background: player.isBanned ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                                border: player.isBanned ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
+                                color: player.isBanned ? '#34d399' : '#f87171',
+                                fontSize: 11,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                              }}
+                              onMouseEnter={e => {
+                                e.currentTarget.style.background = player.isBanned ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)';
+                              }}
+                              onMouseLeave={e => {
+                                e.currentTarget.style.background = player.isBanned ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)';
+                              }}
+                            >
+                              {player.isBanned ? '✅ Unban' : '🚫 Ban'}
                             </button>
                           </td>
                         </tr>
@@ -1179,6 +1470,316 @@ export default function AdminDashboard() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* EDIT PLAYER STATS MODAL */}
+        {editingPlayer && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(4, 4, 9, 0.85)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: 16
+          }}>
+            <div style={{
+              background: '#0c0c16',
+              border: '1.5px solid #d4af37',
+              borderRadius: 16,
+              width: '100%',
+              maxWidth: 420,
+              padding: 24,
+              boxShadow: '0 10px 40px rgba(0,0,0,0.5)',
+              boxSizing: 'border-box'
+            }}>
+              <h3 style={{
+                margin: '0 0 16px 0',
+                color: '#fde68a',
+                fontSize: 16,
+                fontWeight: 800,
+                textTransform: 'uppercase',
+                fontFamily: "'Playfair Display', serif"
+              }}>
+                ✏️ Edit Player Stats: {editingPlayer.username}
+              </h3>
+              
+              <form onSubmit={handleEditStatsSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 11, color: '#94a3b8', marginBottom: 4, fontWeight: 700 }}>
+                    PLAYER LEVEL
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={editLevel}
+                    onChange={e => setEditLevel(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: 8,
+                      borderRadius: 6,
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid rgba(212, 175, 55, 0.25)',
+                      color: '#fff',
+                      fontSize: 13,
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                    required
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, color: '#94a3b8', marginBottom: 4, fontWeight: 700 }}>
+                      WINS
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={editWins}
+                      onChange={e => setEditWins(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: 8,
+                        borderRadius: 6,
+                        background: 'rgba(255,255,255,0.03)',
+                        border: '1px solid rgba(212, 175, 55, 0.25)',
+                        color: '#fff',
+                        fontSize: 13,
+                        outline: 'none',
+                        boxSizing: 'border-box'
+                      }}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, color: '#94a3b8', marginBottom: 4, fontWeight: 700 }}>
+                      TOTAL GAMES
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={editGames}
+                      onChange={e => setEditGames(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: 8,
+                        borderRadius: 6,
+                        background: 'rgba(255,255,255,0.03)',
+                        border: '1px solid rgba(212, 175, 55, 0.25)',
+                        color: '#fff',
+                        fontSize: 13,
+                        outline: 'none',
+                        boxSizing: 'border-box'
+                      }}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: 11, color: '#94a3b8', marginBottom: 4, fontWeight: 700 }}>
+                    LIFETIME NET WORTH (₹)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={editNetWorth}
+                    onChange={e => setEditNetWorth(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: 8,
+                      borderRadius: 6,
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid rgba(212, 175, 55, 0.25)',
+                      color: '#fff',
+                      fontSize: 13,
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                    required
+                  />
+                </div>
+
+                <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+                  <button
+                    type="button"
+                    onClick={() => setEditingPlayer(null)}
+                    style={{
+                      flex: 1,
+                      padding: 10,
+                      borderRadius: 8,
+                      background: 'rgba(255,255,255,0.05)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      color: '#cbd5e1',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={editSaving}
+                    style={{
+                      flex: 1,
+                      padding: 10,
+                      borderRadius: 8,
+                      background: 'linear-gradient(135deg, #d4af37 0%, #fbbf24 100%)',
+                      border: 'none',
+                      color: '#000',
+                      fontSize: 12,
+                      fontWeight: 800,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {editSaving ? 'Saving...' : '💾 Save Changes'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* BAN/SUSPEND PLAYER MODAL */}
+        {banningPlayer && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(4, 4, 9, 0.85)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: 16
+          }}>
+            <div style={{
+              background: '#0c0c16',
+              border: banningPlayer.isBanned ? '1.5px solid #10b981' : '1.5px solid #ef4444',
+              borderRadius: 16,
+              width: '100%',
+              maxWidth: 420,
+              padding: 24,
+              boxShadow: '0 10px 40px rgba(0,0,0,0.5)',
+              boxSizing: 'border-box'
+            }}>
+              <h3 style={{
+                margin: '0 0 10px 0',
+                color: '#fff',
+                fontSize: 16,
+                fontWeight: 800,
+                textTransform: 'uppercase',
+                fontFamily: "'Playfair Display', serif"
+              }}>
+                {banningPlayer.isBanned ? '✅ Lift Ban / Suspend Account' : '🚫 Ban/Suspend Player'}
+              </h3>
+              <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 16px 0' }}>
+                {banningPlayer.isBanned 
+                  ? `Are you sure you want to lift the suspension for player ${banningPlayer.username}? They will be allowed to log in and join game rooms immediately.`
+                  : `You are placing a profile restriction on ${banningPlayer.username}. They will be barred from creating or joining match sessions.`
+                }
+              </p>
+
+              {!banningPlayer.isBanned && (
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', fontSize: 11, color: '#94a3b8', marginBottom: 6, fontWeight: 700 }}>
+                    REASON FOR SUSPENSION
+                  </label>
+                  <textarea
+                    rows={3}
+                    placeholder="Enter violation reason (e.g. Inappropriate behavior, using exploits, match-fixing)"
+                    value={banReasonText}
+                    onChange={e => setBanReasonText(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: 8,
+                      borderRadius: 6,
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid rgba(239, 68, 68, 0.25)',
+                      color: '#fff',
+                      fontSize: 12,
+                      fontFamily: 'inherit',
+                      resize: 'none',
+                      outline: 'none',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBanningPlayer(null);
+                    setBanReasonText('');
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: 10,
+                    borderRadius: 8,
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: '#cbd5e1',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                
+                {banningPlayer.isBanned ? (
+                  <button
+                    onClick={() => handleToggleBanSubmit(false)}
+                    disabled={banSaving}
+                    style={{
+                      flex: 1,
+                      padding: 10,
+                      borderRadius: 8,
+                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                      border: 'none',
+                      color: '#fff',
+                      fontSize: 12,
+                      fontWeight: 800,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {banSaving ? 'Updating...' : '✅ Confirm Unban'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleToggleBanSubmit(true)}
+                    disabled={banSaving}
+                    style={{
+                      flex: 1,
+                      padding: 10,
+                      borderRadius: 8,
+                      background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                      border: 'none',
+                      color: '#fff',
+                      fontSize: 12,
+                      fontWeight: 800,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {banSaving ? 'Updating...' : '🚫 Enforce Ban'}
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
