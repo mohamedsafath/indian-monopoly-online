@@ -25,11 +25,21 @@ const EMIT_TIMEOUT_MS = 10_000;
  * Used for auto-healing connections on reconnection handshakes.
  */
 export const updateSocketQuery = (roomCode, playerId) => {
+  if (!socket.io.opts) {
+    socket.io.opts = {};
+  }
   if (!socket.io.opts.query) {
     socket.io.opts.query = {};
   }
-  if (roomCode) socket.io.opts.query.roomCode = roomCode.toUpperCase();
+  const rc = roomCode ? roomCode.toUpperCase() : null;
+  if (rc) socket.io.opts.query.roomCode = rc;
   if (playerId) socket.io.opts.query.playerId = playerId;
+
+  socket.query = {
+    ...socket.query,
+    ...(rc ? { roomCode: rc } : {}),
+    ...(playerId ? { playerId } : {}),
+  };
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

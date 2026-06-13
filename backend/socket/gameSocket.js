@@ -1586,9 +1586,23 @@ const mountGameSocket = (io) => {
     // Auto-heal socket room mapping during connection handshake if query params exist
     const handshakeRoomCode = socket.handshake.query?.roomCode;
     const handshakePlayerId = socket.handshake.query?.playerId;
-    if (handshakeRoomCode && handshakePlayerId) {
-      const trimmedCode = (handshakeRoomCode + '').trim().toUpperCase();
-      const room = rooms.get(trimmedCode);
+    if (handshakePlayerId) {
+      let trimmedCode = handshakeRoomCode ? (handshakeRoomCode + '').trim().toUpperCase() : null;
+      let room = trimmedCode ? rooms.get(trimmedCode) : null;
+
+      if (!room) {
+        // Fallback: Search all active rooms for this playerId
+        for (const [rCode, r] of rooms.entries()) {
+          const p = r.players.find(pl => pl.id === handshakePlayerId) ||
+                    (r.spectators || []).find(sp => sp.id === handshakePlayerId);
+          if (p) {
+            room = r;
+            trimmedCode = rCode;
+            break;
+          }
+        }
+      }
+
       if (room) {
         const player = findPlayerById(room, handshakePlayerId);
         if (player) {
