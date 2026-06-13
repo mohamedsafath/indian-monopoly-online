@@ -651,7 +651,8 @@ export default function GameRoom() {
     if (isSequencingRef.current) return;
     isSequencingRef.current = true;
 
-    while (eventQueueRef.current.length > 0) {
+    try {
+      while (eventQueueRef.current.length > 0) {
       const event = eventQueueRef.current.shift();
 
       const pushMessageLate = (
@@ -919,15 +920,17 @@ export default function GameRoom() {
         default:
           break;
       }
+      }
+    } catch (err) {
+      console.error('[Sequencer] Uncaught animation sequencer error:', err);
+    } finally {
+      // After all events in the queue are executed, apply the pending server state
+      if (pendingGameStateRef.current) {
+        setGameState(pendingGameStateRef.current);
+        pendingGameStateRef.current = null;
+      }
+      isSequencingRef.current = false;
     }
-
-    // After all events in the queue are executed, apply the pending server state
-    if (pendingGameStateRef.current) {
-      setGameState(pendingGameStateRef.current);
-      pendingGameStateRef.current = null;
-    }
-
-    isSequencingRef.current = false;
   }, [myId, triggerRoll, resetDice, animateMovement, pushFeedEvent, boardAnimation, handleDismissCard]);
 
   // ── Socket listeners ───────────────────────────────────────────────────────
