@@ -225,7 +225,7 @@ const updateUserStats = async (
           hotelsBuilt: parsedHotelsBuilt,
           level: calculatedLevel
         },
-        { new: true }
+        { returnDocument: 'after' }
       ).lean();
       if (updated) {
         console.log(`[db] Updated stats for player ${playerId}: Wins ${parsedWins}, Games ${parsedGames}, Level ${calculatedLevel}`);
@@ -293,7 +293,7 @@ const updateAvatar = async (playerId, avatar) => {
       const updated = await User.findOneAndUpdate(
         { playerId },
         { avatar },
-        { new: true }
+        { returnDocument: 'after' }
       ).lean();
       if (updated) {
         console.log(`[db] Updated avatar for player ${playerId}`);

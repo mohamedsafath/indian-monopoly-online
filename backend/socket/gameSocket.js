@@ -208,7 +208,6 @@ const lobbySnapshot = (room) => ({
  */
 const emitRoomUpdated = (io, room) => {
   const snapshot = lobbySnapshot(room);
-  console.log('[emit] room-updated ->', room.code, snapshot.players.length);
   io.to(room.code).emit('room-updated', envelope(true, snapshot));
   saveRoom(room);
 };

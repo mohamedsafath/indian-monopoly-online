@@ -1031,7 +1031,8 @@ export default function GameRoom() {
       const winner = data?.username ?? 'Someone';
       playWinnerSound();
       pushFeedEvent(`Game Over! ${winner} wins! 🏆`, '🎉');
-      setTimeout(() => { alert(`🏆 ${winner} wins Monopoly India!`); navigate('/'); }, 800);
+      // Navigate to the results page — do NOT use alert() as it blocks the tab
+      setTimeout(() => navigate(`/results/${roomCode}`), 800);
     };
     const onKicked            = () => {
       sessionStorage.clear();

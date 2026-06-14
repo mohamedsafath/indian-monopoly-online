@@ -502,7 +502,7 @@ adminRouter.post("/edit-stats", verifyAdmin, async (req, res) => {
     
     const dbActive = getIsDbActive();
     if (dbActive) {
-      const updated = await User.findOneAndUpdate({ playerId }, updates, { new: true }).lean();
+      const updated = await User.findOneAndUpdate({ playerId }, updates, { returnDocument: 'after' }).lean();
       if (!updated) {
         return res.status(404).json({ ok: false, error: "User not found" });
       }
@@ -545,7 +545,7 @@ adminRouter.post("/toggle-ban", verifyAdmin, async (req, res) => {
     
     const dbActive = getIsDbActive();
     if (dbActive) {
-      const updated = await User.findOneAndUpdate({ playerId }, updates, { new: true }).lean();
+      const updated = await User.findOneAndUpdate({ playerId }, updates, { returnDocument: 'after' }).lean();
       if (!updated) {
         return res.status(404).json({ ok: false, error: "User not found" });
       }

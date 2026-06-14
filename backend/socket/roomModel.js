@@ -100,7 +100,7 @@ const _writeRoomToDB = async (serializedRoom) => {
     await Room.findOneAndUpdate(
       { code: serializedRoom.code },
       serializedRoom,
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
     lastSavedMetadata.set(serializedRoom.code, {
       status: serializedRoom.status,
