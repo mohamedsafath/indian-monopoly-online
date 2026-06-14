@@ -1654,7 +1654,6 @@ const _advanceTurn = (gameState) => {
   }
   gameState.hasRolled     = false;
   gameState.pendingAction = null;
-  gameState.activeTrade   = null;
   gameState.builtThisTurn = [];
 
   // Find next non-bankrupt player
