@@ -353,20 +353,21 @@ function BoardCenter({
           background: activeToast.type === 'rent'    ? 'rgba(239,68,68,0.88)'
                     : activeToast.type === 'repossession' ? 'linear-gradient(135deg, rgba(185,28,28,0.92) 0%, rgba(127,17,17,0.92) 100%)'
                     : activeToast.type === 'mortgage' ? 'linear-gradient(135deg, rgba(217,119,6,0.92) 0%, rgba(180,83,9,0.92) 100%)'
+                    : activeToast.type === 'unmortgage' ? 'linear-gradient(135deg, rgba(16,185,129,0.92) 0%, rgba(5,150,105,0.92) 100%)'
                     : activeToast.type === 'go'      ? 'rgba(34,197,94,0.88)'
                     : activeToast.type === 'house'   ? 'rgba(34,197,94,0.88)'
                     : activeToast.type === 'hotel'   ? 'rgba(168,85,247,0.88)'
                     : activeToast.type === 'trade'   ? 'rgba(59,130,246,0.88)'
                     : 'rgba(245,158,11,0.88)',
           backdropFilter: 'blur(8px)',
-          border:    (activeToast.type === 'repossession' || activeToast.type === 'mortgage') ? '1.5px solid rgba(251,191,36,0.5)' : '1px solid rgba(255,255,255,0.15)',
+          border:    (activeToast.type === 'repossession' || activeToast.type === 'mortgage' || activeToast.type === 'unmortgage') ? '1.5px solid rgba(251,191,36,0.5)' : '1px solid rgba(255,255,255,0.15)',
           borderRadius: 10,
           padding:   'var(--center-toast-padding, 7px 16px)',
           fontSize:  'var(--center-toast-font-size, 11px)',
           fontWeight: 700,
           color:     '#fff',
           whiteSpace:'nowrap',
-          boxShadow: (activeToast.type === 'repossession' || activeToast.type === 'mortgage') ? '0 0 16px rgba(251,191,36,0.35), 0 4px 20px rgba(0,0,0,0.5)' : '0 4px 20px rgba(0,0,0,0.4)',
+          boxShadow: (activeToast.type === 'repossession' || activeToast.type === 'mortgage' || activeToast.type === 'unmortgage') ? '0 0 16px rgba(251,191,36,0.35), 0 4px 20px rgba(0,0,0,0.5)' : '0 4px 20px rgba(0,0,0,0.4)',
         }}>
           {activeToast.type === 'rent'    && `💸 ${players[activeToast.fromId]?.username ?? 'Someone'} paid ₹${Number(activeToast.amount).toLocaleString('en-IN')} to ${players[activeToast.toId]?.username ?? 'someone'}`}
           {activeToast.type === 'buy'     && `🏠 Purchased ${TILE_BY_ID[activeToast.tileId]?.name ?? 'property'}`}
@@ -379,6 +380,7 @@ function BoardCenter({
           {activeToast.type === 'auction' && `🔨 Auction started!`}
           {activeToast.type === 'repossession' && `🏦 Bank repossessed ${activeToast.tileName}`}
           {activeToast.type === 'mortgage' && `🏦 Mortgaged ${activeToast.tileName}`}
+          {activeToast.type === 'unmortgage' && `🏦 Unmortgaged ${activeToast.tileName}`}
         </div>
       )}
     </div>

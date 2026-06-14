@@ -834,6 +834,11 @@ export default function GameRoom() {
           // Trigger visual coin flying and rent floater effects
           triggerRentPaidEffects(fromId, toId, amount);
 
+          // Update game state immediately so cash sidebars reflect rent payment while coins fly!
+          if (pendingGameStateRef.current) {
+            setGameState(pendingGameStateRef.current);
+          }
+
           // Block the sequencer until the rent is paid/acknowledged
           await new Promise((resolve) => {
             rentDismissResolverRef.current = resolve;
@@ -870,6 +875,9 @@ export default function GameRoom() {
           const { amount } = event.payload;
           playCoinSound();
           boardAnimation.showToast({ type: 'tax', amount });
+          if (pendingGameStateRef.current) {
+            setGameState(pendingGameStateRef.current);
+          }
           await delay(1500);
           break;
         }
@@ -879,6 +887,9 @@ export default function GameRoom() {
           const { amount } = event.payload;
           playCoinSound();
           boardAnimation.showToast({ type: 'collect', amount });
+          if (pendingGameStateRef.current) {
+            setGameState(pendingGameStateRef.current);
+          }
           await delay(1500);
           break;
         }
@@ -888,6 +899,9 @@ export default function GameRoom() {
           const { amount } = event.payload;
           playCoinSound();
           boardAnimation.showToast({ type: 'go', amount });
+          if (pendingGameStateRef.current) {
+            setGameState(pendingGameStateRef.current);
+          }
           await delay(1500);
           break;
         }
@@ -903,6 +917,10 @@ export default function GameRoom() {
           // Trigger visual confetti and flying deed card effects
           triggerBoughtEffects(tileId);
 
+          if (pendingGameStateRef.current) {
+            setGameState(pendingGameStateRef.current);
+          }
+
           await delay(1000);
           break;
         }
@@ -915,6 +933,9 @@ export default function GameRoom() {
           boardAnimation.setHouseBuiltInfo({ tileId, houses: houses ?? 0, hotel: hotel ?? false });
           boardAnimation.flashProperty(tileId);
           boardAnimation.showToast({ type: event.type === 'HOTEL_BUILT' ? 'hotel' : 'house', tileId });
+          if (pendingGameStateRef.current) {
+            setGameState(pendingGameStateRef.current);
+          }
           await delay(1500);
           break;
         }
@@ -967,6 +988,9 @@ export default function GameRoom() {
           const tile = TILE_BY_ID[tileId];
           boardAnimation.flashProperty(tileId);
           boardAnimation.showToast({ type: 'repossession', tileId, tileName: tile?.name });
+          if (pendingGameStateRef.current) {
+            setGameState(pendingGameStateRef.current);
+          }
           await delay(2500);
           break;
         }
@@ -978,6 +1002,23 @@ export default function GameRoom() {
           playCoinSound();
           boardAnimation.flashProperty(tileId);
           boardAnimation.showToast({ type: 'mortgage', tileId, tileName: tile?.name, amount });
+          if (pendingGameStateRef.current) {
+            setGameState(pendingGameStateRef.current);
+          }
+          await delay(2000);
+          break;
+        }
+
+        // ── PROPERTY UNMORTGAGED ──
+        case 'PROPERTY_UNMORTGAGED': {
+          const { tileId, cost } = event.payload;
+          const tile = TILE_BY_ID[tileId];
+          playCoinSound();
+          boardAnimation.flashProperty(tileId);
+          boardAnimation.showToast({ type: 'unmortgage', tileId, tileName: tile?.name, amount: cost });
+          if (pendingGameStateRef.current) {
+            setGameState(pendingGameStateRef.current);
+          }
           await delay(2000);
           break;
         }
