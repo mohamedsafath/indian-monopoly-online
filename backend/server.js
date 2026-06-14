@@ -646,6 +646,11 @@ app.get("/", (req, res) => {
   res.send("🚀 Monopoly India Backend Running");
 });
 
+// Health-check endpoint (used by keep-alive ping)
+app.get("/health", (req, res) => {
+  res.json({ ok: true, uptime: process.uptime(), rooms: Object.keys(rooms).length });
+});
+
 // Socket.IO setup
 const io = new Server(server, {
   cors: {
@@ -655,6 +660,10 @@ const io = new Server(server, {
     methods: ["GET", "POST"],
     credentials: true
   },
+  // Faster disconnect detection (default: 25s interval, 20s timeout)
+  // With these values, a dead connection is detected in ~30s total
+  pingInterval: 20000,  // send ping every 20s
+  pingTimeout: 10000,   // declare disconnect if no pong within 10s
 });
 
 mountGameSocket(io);
@@ -664,6 +673,34 @@ const PORT = process.env.PORT || 5001;
 
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
+
+  // ─── Keep-Alive Ping (prevents Render free tier spin-down) ───────────────
+  // Render spins down free instances after ~15 minutes of inactivity.
+  // We self-ping /health every 10 minutes so the server stays warm 24/7.
+  const SELF_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+  const PING_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+
+  setInterval(() => {
+    const url = new URL(`${SELF_URL}/health`);
+    const mod = url.protocol === "https:" ? require("https") : require("http");
+    const req = mod.get(url.href, (res) => {
+      let body = "";
+      res.on("data", (c) => (body += c));
+      res.on("end", () => {
+        try {
+          const data = JSON.parse(body);
+          console.log(`[keep-alive] ✅ pong — uptime=${Math.floor(data.uptime)}s rooms=${data.rooms}`);
+        } catch (_) {
+          console.log(`[keep-alive] ✅ pong (non-JSON)`);
+        }
+      });
+    });
+    req.on("error", (err) => {
+      console.warn(`[keep-alive] ⚠️ ping failed: ${err.message}`);
+    });
+    req.end();
+  }, PING_INTERVAL_MS);
+  // ──────────────────────────────────────────────────────────────────────────
 });
 
 // Process-level watchers for uncaught rejections/exceptions
