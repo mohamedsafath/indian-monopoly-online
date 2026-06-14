@@ -155,8 +155,13 @@ export default function Home() {
         .then(res => res.json())
         .then(data => {
           if (data && data.ok && data.user) {
-            // Merge token so it's not lost
-            const updatedUser = { ...data.user, token: googleUser.token };
+            // Merge token and keep the local custom username if set
+            const localUser = JSON.parse(localStorage.getItem('mi_google_user') || '{}');
+            const updatedUser = { 
+              ...data.user, 
+              username: localUser.username || data.user.username,
+              token: googleUser.token 
+            };
             localStorage.setItem('mi_google_user', JSON.stringify(updatedUser));
             setGoogleUser(updatedUser);
           }
@@ -190,7 +195,7 @@ export default function Home() {
     setCreateUsername(trimmed);
     setJoinUsername(trimmed);
 
-    if (googleUser && googleUser.isGuest) {
+    if (googleUser) {
       const updatedUser = { ...googleUser, username: trimmed };
       localStorage.setItem('mi_google_user', JSON.stringify(updatedUser));
       setGoogleUser(updatedUser);
@@ -392,14 +397,14 @@ export default function Home() {
           <Card title="✦ Create a New Room">
             <div className="flex flex-col gap-2">
               <span className="text-[10px] font-bold text-gray-500 tracking-wider">
-                {googleUser?.isGuest ? '👤 Host Identity (Guest - Editable)' : '🏆 Host Identity (Verified)'}
+                {googleUser?.isGuest ? '👤 Host Identity (Guest)' : '🏆 Host Identity (Verified - Editable)'}
               </span>
               <GoldInput
                 placeholder="Your name"
                 value={createUsername}
                 onChange={handleNameChange}
                 maxLength={20}
-                disabled={!googleUser?.isGuest}
+                disabled={false}
               />
             </div>
             {createError && (
@@ -426,14 +431,14 @@ export default function Home() {
           <Card title="✦ Join with a Code">
             <div className="flex flex-col gap-2">
               <span className="text-[10px] font-bold text-gray-500 tracking-wider">
-                {googleUser?.isGuest ? '👤 Player Identity (Guest - Editable)' : '🏆 Player Identity (Verified)'}
+                {googleUser?.isGuest ? '👤 Player Identity (Guest)' : '🏆 Player Identity (Verified - Editable)'}
               </span>
               <GoldInput
                 placeholder="Your name"
                 value={joinUsername}
                 onChange={handleNameChange}
                 maxLength={20}
-                disabled={!googleUser?.isGuest}
+                disabled={false}
               />
             </div>
             <GoldInput
