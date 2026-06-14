@@ -15,6 +15,28 @@ export function AuctionModal({
   onPlaceBid,
   onPassAuction,
 }) {
+  const [bidAmount, setBidAmount] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(0);
+
+  const highBid = activeAuction?.highBid ?? 0;
+
+  // Keep bidAmount valid as highBid updates from socket
+  useEffect(() => {
+    setBidAmount(0);
+  }, [highBid]);
+
+  // Live countdown timer synced to activeAuction.endsAt
+  useEffect(() => {
+    if (!activeAuction?.endsAt) return;
+    const updateTimer = () => {
+      const remaining = Math.max(0, Math.ceil((activeAuction.endsAt - Date.now()) / 1000));
+      setTimeLeft(remaining);
+    };
+    updateTimer();
+    const timerId = setInterval(updateTimer, 250);
+    return () => clearInterval(timerId);
+  }, [activeAuction?.endsAt]);
+
   if (!activeAuction) return null;
 
   const tile = TILE_BY_ID[activeAuction.tileId];
@@ -28,28 +50,7 @@ export function AuctionModal({
   const isParticipant = activeAuction.participants?.includes(myId) ?? false;
   const canBid = isParticipant && !hasPassed && !myPlayer?.isBankrupt;
 
-  const highBid = activeAuction.highBid ?? 0;
   const highBidder = activeAuction.highBidderId ? players[activeAuction.highBidderId] : null;
-
-  const [bidAmount, setBidAmount] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(0);
-
-  // Keep bidAmount valid as highBid updates from socket
-  useEffect(() => {
-    setBidAmount(0);
-  }, [highBid]);
-
-  // Live countdown timer synced to activeAuction.endsAt
-  useEffect(() => {
-    if (!activeAuction.endsAt) return;
-    const updateTimer = () => {
-      const remaining = Math.max(0, Math.ceil((activeAuction.endsAt - Date.now()) / 1000));
-      setTimeLeft(remaining);
-    };
-    updateTimer();
-    const timerId = setInterval(updateTimer, 250);
-    return () => clearInterval(timerId);
-  }, [activeAuction.endsAt]);
 
   const handleQuickBid = (increment) => {
     const nextBid = highBid + increment;

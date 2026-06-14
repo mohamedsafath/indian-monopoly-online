@@ -23,13 +23,15 @@ export const TokenLayer = React.memo(function TokenLayer({
   currentPlayerId,
   myId,
 }) {
-  if (!players || !displayPositions) return null;
-
-  const playerList = Object.values(players).filter((p) => !p.isBankrupt);
+  const playerList = useMemo(() => {
+    if (!players) return [];
+    return Object.values(players).filter((p) => !p.isBankrupt);
+  }, [players]);
 
   // Group players by their DISPLAYED tile (for stacking)
   const tileGroups = useMemo(() => {
     const groups = {};
+    if (!displayPositions) return groups;
     playerList.forEach((p) => {
       const pos = displayPositions[p.id] ?? p.position;
       if (!groups[pos]) groups[pos] = [];
@@ -37,6 +39,8 @@ export const TokenLayer = React.memo(function TokenLayer({
     });
     return groups;
   }, [playerList, displayPositions]);
+
+  if (!players || !displayPositions) return null;
 
   return (
     <>

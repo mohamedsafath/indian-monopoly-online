@@ -16,44 +16,21 @@ import React, { useState, useEffect } from 'react';
 const fmt = (n) => Number(n ?? 0).toLocaleString('en-IN');
 
 export function RentModal({ rentInfo, players, myId, onClose }) {
-  if (!rentInfo) return null;
-
-  const payer  = players?.[rentInfo.fromId];
-  const owner  = players?.[rentInfo.toId];
-  const isMe   = rentInfo.fromId === myId;
-  const isPaid = rentInfo.toId === myId;
-  
+  const isMe   = rentInfo?.fromId === myId;
+  const isPaid = rentInfo?.toId === myId;
   const myMoney = players?.[myId]?.money ?? 0;
 
-  const [status, setStatus] = useState(isMe ? 'unpaid' : 'unpaid');
+  const [status, setStatus] = useState('unpaid');
   const [animatedMoney, setAnimatedMoney] = useState(myMoney);
 
-  // Auto-dismiss for spectators (not me, not getting paid)
-  useEffect(() => {
-    if (!isMe && !isPaid) {
-      const t = setTimeout(onClose, 3500);
-      return () => clearTimeout(t);
-    }
-  }, [isMe, isPaid, onClose]);
-
-  // Auto-trigger receive animation for the landlord
-  useEffect(() => {
-    if (isPaid && status === 'unpaid') {
-      const t = setTimeout(() => {
-        handleTriggerReceiveAnimation();
-      }, 600);
-      return () => clearTimeout(t);
-    }
-  }, [isPaid, status]);
-
-  const handlePay = () => {
-    if (status !== 'unpaid') return;
+  function handlePay() {
+    if (status !== 'unpaid' || !rentInfo) return;
     setStatus('paying');
 
     const duration = 1000; // 1s
     const startTime = performance.now();
     const startVal = myMoney;
-    const targetVal = myMoney - rentInfo.amount;
+    const targetVal = myMoney - (rentInfo?.amount ?? 0);
 
     const animate = (now) => {
       const elapsed = now - startTime;
@@ -70,15 +47,16 @@ export function RentModal({ rentInfo, players, myId, onClose }) {
       }
     };
     requestAnimationFrame(animate);
-  };
+  }
 
-  const handleTriggerReceiveAnimation = () => {
+  function handleTriggerReceiveAnimation() {
+    if (!rentInfo) return;
     setStatus('paying');
 
     const duration = 1000; // 1s
     const startTime = performance.now();
     const startVal = myMoney;
-    const targetVal = myMoney + rentInfo.amount;
+    const targetVal = myMoney + (rentInfo?.amount ?? 0);
 
     const animate = (now) => {
       const elapsed = now - startTime;
@@ -95,7 +73,32 @@ export function RentModal({ rentInfo, players, myId, onClose }) {
       }
     };
     requestAnimationFrame(animate);
-  };
+  }
+
+  // Auto-dismiss for spectators (not me, not getting paid)
+  useEffect(() => {
+    if (!rentInfo) return;
+    if (!isMe && !isPaid) {
+      const t = setTimeout(onClose, 3500);
+      return () => clearTimeout(t);
+    }
+  }, [rentInfo, isMe, isPaid, onClose]);
+
+  // Auto-trigger receive animation for the landlord
+  useEffect(() => {
+    if (!rentInfo) return;
+    if (isPaid && status === 'unpaid') {
+      const t = setTimeout(() => {
+        handleTriggerReceiveAnimation();
+      }, 600);
+      return () => clearTimeout(t);
+    }
+  }, [rentInfo, isPaid, status]);
+
+  if (!rentInfo) return null;
+
+  const payer  = players?.[rentInfo.fromId];
+  const owner  = players?.[rentInfo.toId];
 
   return (
     <div

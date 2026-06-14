@@ -41,6 +41,8 @@ import {
   PLAYER_COLORS,
 } from '../../utils/boardLayout';
 
+const fmt = (n) => Number(n ?? 0).toLocaleString('en-IN');
+
 // ── Monopoly detection ────────────────────────────────────────────────────────
 function computeMonopolies(properties) {
   const monopolies  = {};

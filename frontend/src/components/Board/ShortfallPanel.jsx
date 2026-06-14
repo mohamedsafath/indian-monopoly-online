@@ -15,16 +15,12 @@ export default function ShortfallPanel({
   onDeclareBankruptcy,
   isMobile = false,
 }) {
-  if (!me || me.money >= 0) return null;
-
-  const debtRequired = Math.abs(me.money);
-
   // Group properties check: does any property in this group have buildings?
   const hasBuildingsInGroup = (group) => {
     if (!group) return false;
     const groupTiles = BOARD_TILES.filter(t => t.group === group);
     return groupTiles.some(t => {
-      const p = gameState.properties?.[t.id];
+      const p = gameState?.properties?.[t.id];
       return p && ((p.houses ?? 0) > 0 || p.hotel);
     });
   };
@@ -37,10 +33,10 @@ export default function ShortfallPanel({
 
     const groupTiles = BOARD_TILES.filter(t => t.group === tile.group);
     const ownedGroupProps = groupTiles
-      .map(t => gameState.properties?.[t.id])
-      .filter(p => p && p.ownerId === me.id);
+      .map(t => gameState?.properties?.[t.id])
+      .filter(p => p && p.ownerId === me?.id);
     
-    const maxHouses = Math.max(...ownedGroupProps.map(p => p.houses ?? 0));
+    const maxHouses = Math.max(...ownedGroupProps.map(p => p?.houses ?? 0));
     return prop.houses === maxHouses;
   };
 
@@ -51,6 +47,7 @@ export default function ShortfallPanel({
 
   // Mortgage checklist items
   const liquidatableAssets = useMemo(() => {
+    if (!me || !myProperties) return [];
     return myProperties.map(prop => {
       const tile = prop.tile;
       const mortgageVal = tile.mortgage ?? (tile.price ? tile.price / 2 : 0);
@@ -71,10 +68,11 @@ export default function ShortfallPanel({
         hasGroupBuildings,
       };
     });
-  }, [myProperties, gameState?.properties, me.id]);
+  }, [myProperties, gameState?.properties, me?.id]);
 
   // Calculate maximum potential cash that can be raised
   const totalMaxLiquidation = useMemo(() => {
+    if (!me) return 0;
     let sum = 0;
     liquidatableAssets.forEach(asset => {
       if (!asset.mortgaged) {
@@ -90,8 +88,11 @@ export default function ShortfallPanel({
       sum += 5000;
     }
     return sum;
-  }, [liquidatableAssets, me.loanActive]);
+  }, [liquidatableAssets, me?.loanActive]);
 
+  if (!me || me.money >= 0) return null;
+
+  const debtRequired = Math.abs(me.money);
   const cannotRaiseEnough = totalMaxLiquidation < debtRequired;
 
   return (

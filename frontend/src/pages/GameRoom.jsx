@@ -572,6 +572,76 @@ export default function GameRoom() {
 
   const boardAnimation = useBoardAnimation();
 
+  // Helper: Get player card center for flying elements
+  const getCardCenter = useCallback((playerId) => {
+    const isMobile = window.innerWidth < 1024;
+    let el = document.getElementById(isMobile ? `player-card-mobile-${playerId}` : `player-card-${playerId}`);
+    if (!el) {
+      el = document.getElementById(`player-card-${playerId}`) || document.getElementById(`player-card-mobile-${playerId}`);
+    }
+    if (el) {
+      const rect = el.getBoundingClientRect();
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    }
+    return { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+  }, []);
+
+  // Helper: Trigger property bought confetti and flying deed card
+  const triggerBoughtEffects = useCallback((tileId) => {
+    // Spawn confetti from center
+    const newConfetti = [];
+    const colors = ['#f59e0b', '#10b981', '#3b82f6', '#ec4899', '#8b5cf6', '#f43f5e', '#fbbf24', '#34d399'];
+    for (let i = 0; i < 40; i++) {
+      const cx = (Math.random() - 0.5) * 450;
+      const cy = -Math.random() * 300 - 50;
+      const crot = (Math.random() - 0.5) * 720;
+      const size = Math.random() * 8 + 6;
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      const delay = Math.random() * 0.4;
+      newConfetti.push({ id: Date.now() + i, cx, cy, crot, size, color, delay });
+    }
+    setConfetti(newConfetti);
+    setTimeout(() => setConfetti([]), 2500);
+
+    // Spawn flying deed card
+    setFlyingDeed({ tileId });
+    setTimeout(() => setFlyingDeed(null), 2000);
+  }, []);
+
+  // Helper: Trigger rent flying coins and green floating label
+  const triggerRentPaidEffects = useCallback((fromId, toId, amount) => {
+    const start = getCardCenter(fromId);
+    const end = getCardCenter(toId);
+
+    // Spawn flying gold coins
+    const coins = [];
+    for (let i = 0; i < 12; i++) {
+      const delay = i * 0.08;
+      coins.push({
+        id: Date.now() + i,
+        startX: start.x,
+        startY: start.y,
+        dx: end.x - start.x,
+        dy: end.y - start.y,
+        delay,
+      });
+    }
+    setFlyingCoins(coins);
+    setTimeout(() => setFlyingCoins([]), 2000);
+
+    // Spawn rent floating label at receiver's card position
+    const floater = {
+      id: Date.now(),
+      x: end.x,
+      y: end.y - 25,
+      amount,
+    };
+    setRentFloaters(prev => [...prev, floater]);
+    setTimeout(() => {
+      setRentFloaters(prev => prev.filter(f => f.id !== floater.id));
+    }, 2200);
+  }, [getCardCenter]);
+
   // ── Deck click & Card dismissal handlers ──────────────────────────────────
   const handleDismissCard = useCallback(() => {
     clearTimeout(cardTimerRef.current);
@@ -1287,75 +1357,7 @@ export default function GameRoom() {
     }
   }, [me, showToast]);
 
-  // Helper: Get player card center for flying elements
-  const getCardCenter = useCallback((playerId) => {
-    const isMobile = window.innerWidth < 1024;
-    let el = document.getElementById(isMobile ? `player-card-mobile-${playerId}` : `player-card-${playerId}`);
-    if (!el) {
-      el = document.getElementById(`player-card-${playerId}`) || document.getElementById(`player-card-mobile-${playerId}`);
-    }
-    if (el) {
-      const rect = el.getBoundingClientRect();
-      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-    }
-    return { x: window.innerWidth / 2, y: window.innerHeight / 2 };
-  }, []);
 
-  // Helper: Trigger property bought confetti and flying deed card
-  const triggerBoughtEffects = useCallback((tileId) => {
-    // Spawn confetti from center
-    const newConfetti = [];
-    const colors = ['#f59e0b', '#10b981', '#3b82f6', '#ec4899', '#8b5cf6', '#f43f5e', '#fbbf24', '#34d399'];
-    for (let i = 0; i < 40; i++) {
-      const cx = (Math.random() - 0.5) * 450;
-      const cy = -Math.random() * 300 - 50;
-      const crot = (Math.random() - 0.5) * 720;
-      const size = Math.random() * 8 + 6;
-      const color = colors[Math.floor(Math.random() * colors.length)];
-      const delay = Math.random() * 0.4;
-      newConfetti.push({ id: Date.now() + i, cx, cy, crot, size, color, delay });
-    }
-    setConfetti(newConfetti);
-    setTimeout(() => setConfetti([]), 2500);
-
-    // Spawn flying deed card
-    setFlyingDeed({ tileId });
-    setTimeout(() => setFlyingDeed(null), 2000);
-  }, []);
-
-  // Helper: Trigger rent flying coins and green floating label
-  const triggerRentPaidEffects = useCallback((fromId, toId, amount) => {
-    const start = getCardCenter(fromId);
-    const end = getCardCenter(toId);
-
-    // Spawn flying gold coins
-    const coins = [];
-    for (let i = 0; i < 12; i++) {
-      const delay = i * 0.08;
-      coins.push({
-        id: Date.now() + i,
-        startX: start.x,
-        startY: start.y,
-        dx: end.x - start.x,
-        dy: end.y - start.y,
-        delay,
-      });
-    }
-    setFlyingCoins(coins);
-    setTimeout(() => setFlyingCoins([]), 2000);
-
-    // Spawn rent floating label at receiver's card position
-    const floater = {
-      id: Date.now(),
-      x: end.x,
-      y: end.y - 25,
-      amount,
-    };
-    setRentFloaters(prev => [...prev, floater]);
-    setTimeout(() => {
-      setRentFloaters(prev => prev.filter(f => f.id !== floater.id));
-    }, 2200);
-  }, [getCardCenter]);
 
   const myProperties = Object.entries(gameState?.properties ?? {})
     .filter(([_, prop]) => prop.ownerId === myId)

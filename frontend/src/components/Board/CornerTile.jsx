@@ -54,12 +54,12 @@ export const CornerTile = React.memo(function CornerTile({
   isOccupied,
   onClick,
 }) {
-  const cfg = CORNER_CONFIG[tileId];
-  if (!cfg) return null;
-
   const handleClick = React.useCallback(() => {
     if (onClick) onClick(tileId);
   }, [onClick, tileId]);
+
+  const cfg = CORNER_CONFIG[tileId];
+  if (!cfg) return null;
 
   return (
     <div
