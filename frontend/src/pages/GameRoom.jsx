@@ -1065,8 +1065,19 @@ export default function GameRoom() {
       setIsSocketConnected(false);
     };
 
+    // Debounce guard: prevent firing reconnectRoom() more than once per 3s
+    // during rapid socket reconnect storms (e.g. Render cold-start cycle)
+    let _lastReconnectAt = 0;
+    const RECONNECT_DEBOUNCE_MS = 3000;
+
     const onConnect = () => {
       setIsSocketConnected(true);
+      const now = Date.now();
+      if (now - _lastReconnectAt < RECONNECT_DEBOUNCE_MS) {
+        console.log('[GameRoom] onConnect debounced — skipping rapid reconnect');
+        return;
+      }
+      _lastReconnectAt = now;
       console.log('[GameRoom] Socket connected/reconnected, restoring match state...');
       let attempts = 0;
       const attemptReconnect = () => {

@@ -660,10 +660,20 @@ const io = new Server(server, {
     methods: ["GET", "POST"],
     credentials: true
   },
-  // Faster disconnect detection (default: 25s interval, 20s timeout)
-  // With these values, a dead connection is detected in ~30s total
-  pingInterval: 20000,  // send ping every 20s
-  pingTimeout: 10000,   // declare disconnect if no pong within 10s
+  // ── Transport ────────────────────────────────────────────────────────────
+  // Render.com free-tier HTTP proxy causes WebSocket upgrades to fail within
+  // ~1 second, creating a reconnect death loop.  Force polling-only on both
+  // client and server to avoid the upgrade dance entirely.
+  transports: ['polling'],
+  allowUpgrades: false,
+  // Engine.IO v3 compatibility (some browsers / proxy setups)
+  allowEIO3: true,
+  // ── Ping/Pong timing ─────────────────────────────────────────────────────
+  // pingInterval: how often the server sends a ping to detect dead connections
+  // pingTimeout:  how long the server waits for a pong before declaring disconnect
+  // Total dead-connection detection time = pingInterval + pingTimeout = 35s
+  pingInterval: 25000,
+  pingTimeout:  10000,
 });
 
 mountGameSocket(io);

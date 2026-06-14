@@ -11,7 +11,9 @@ export class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('[ErrorBoundary Caught Crash]', error, errorInfo);
+    // Log the full error with component stack so we can diagnose crashes in prod
+    console.error('[ErrorBoundary] Caught render crash:', error?.message ?? error);
+    console.error('[ErrorBoundary] Component stack:', errorInfo?.componentStack ?? '(no stack)');
     this.setState({ error, errorInfo });
   }
 
@@ -22,6 +24,9 @@ export class ErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
+      const errMsg = this.state.error?.message ?? String(this.state.error ?? 'Unknown error');
+      const errStack = this.state.errorInfo?.componentStack ?? '';
+
       return (
         <div style={{
           display: 'flex',
@@ -36,7 +41,8 @@ export class ErrorBoundary extends React.Component {
           textAlign: 'center',
         }}>
           <div style={{
-            maxWidth: '500px',
+            maxWidth: '560px',
+            width: '100%',
             background: 'rgba(255, 255, 255, 0.02)',
             border: '1.5px solid rgba(239, 68, 68, 0.25)',
             borderRadius: '24px',
@@ -45,7 +51,7 @@ export class ErrorBoundary extends React.Component {
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: '24px',
+            gap: '20px',
           }}>
             <div style={{
               width: '64px',
@@ -57,6 +63,7 @@ export class ErrorBoundary extends React.Component {
               alignItems: 'center',
               justifyContent: 'center',
               fontSize: '28px',
+              flexShrink: 0,
             }}>
               ⚠️
             </div>
@@ -82,6 +89,42 @@ export class ErrorBoundary extends React.Component {
               </p>
             </div>
 
+            {/* Error details box — helps diagnose production crashes */}
+            {errMsg && (
+              <details style={{
+                width: '100%',
+                textAlign: 'left',
+                background: 'rgba(0,0,0,0.3)',
+                border: '1px solid rgba(239,68,68,0.15)',
+                borderRadius: '12px',
+                padding: '12px 14px',
+                cursor: 'pointer',
+              }}>
+                <summary style={{
+                  fontSize: '11px',
+                  color: 'rgba(239,68,68,0.7)',
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                  userSelect: 'none',
+                }}>
+                  🔍 Error Details (tap to expand)
+                </summary>
+                <pre style={{
+                  marginTop: '10px',
+                  fontSize: '10px',
+                  color: 'rgba(252,165,165,0.8)',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-all',
+                  maxHeight: '160px',
+                  overflowY: 'auto',
+                  lineHeight: 1.5,
+                }}>
+                  {errMsg}
+                  {errStack ? `\n\n--- Component Stack ---\n${errStack.slice(0, 800)}` : ''}
+                </pre>
+              </details>
+            )}
+
             <button
               onClick={this.handleReload}
               style={{
@@ -100,7 +143,7 @@ export class ErrorBoundary extends React.Component {
                 transition: 'all 0.2s',
               }}
             >
-              🔄 Reload & Resume Match
+              🔄 Reload &amp; Resume Match
             </button>
           </div>
         </div>
