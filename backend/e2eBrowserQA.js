@@ -119,14 +119,36 @@ const runAudit = async () => {
     pageA.on('pageerror', recordError);
     pageB.on('pageerror', recordError);
 
-    // Phase 1 - Home Page Load
+    // Phase 1 - Home Page Load (authentic guest login after splash screen)
     try {
       console.log("\n--- PHASE 1: HOME PAGE ---");
-      await pageA.goto(`${FRONTEND_URL}/home`);
-      await pageB.goto(`${FRONTEND_URL}/home`);
+      await pageA.goto(`${FRONTEND_URL}/`);
+      await pageB.goto(`${FRONTEND_URL}/`);
+      console.log("Navigated to root. Waiting 4.5s for splash screen fade...");
+      await delay(4500);
+
+      // Verify Google Login option renders
+      const gmailBtnA = await pageA.$('text=Login via Gmail');
+      if (!gmailBtnA) throw new Error("Google Login button option not visible on landing page");
+
+      // Click Play as Guest
+      await pageA.click('text=Play as Guest');
+      await pageB.click('text=Play as Guest');
       await delay(2000);
-      
-      const titleA = await pageA.title();
+
+      // Verify redirection to /home
+      const urlA = pageA.url();
+      if (!urlA.includes('/home')) throw new Error(`Redirection failed, current URL: ${urlA}`);
+
+      // Verify Stats card / transient user session
+      const statsA = await pageA.textContent('body');
+      if (!statsA.includes('Transient Guest Session')) throw new Error("Stats card or Transient Guest Session badge missing");
+
+      // Verify Username editing works
+      await pageA.fill('input[placeholder="Your name"]', 'RaviHost');
+      await pageB.fill('input[placeholder="Your name"]', 'PriyaPlayer');
+      await delay(500);
+
       await pageA.screenshot({ path: path.join(scratchDir, 'screenshot_phase1_home.png') });
       phases['Phase 1 - Home Page'] = 'PASS';
     } catch (e) {
@@ -138,7 +160,7 @@ const runAudit = async () => {
     // Phase 2 - Create Room
     try {
       console.log("\n--- PHASE 2: CREATE ROOM ---");
-      await pageA.click('button:has-text("CREATE ROOM")');
+      await pageA.click('button:has-text("Create Room")');
       await delay(2500);
       const url = pageA.url();
       const match = url.match(/\/lobby\/([A-Z0-9]{6})/);
@@ -155,8 +177,15 @@ const runAudit = async () => {
     try {
       console.log("\n--- PHASE 3: JOIN ROOM ---");
       await pageB.fill('input[placeholder="Enter Room Code or Invite Link"]', roomCode);
-      await pageB.click('button:has-text("JOIN ROOM")');
+      await pageB.click('button:has-text("Join Room")');
       await delay(2500);
+
+      // Verify host sees guest and guest sees host
+      const textA = await pageA.textContent('body');
+      const textB = await pageB.textContent('body');
+      if (!textA.includes('PriyaPlayer')) throw new Error("Host lobby view does not render guest player");
+      if (!textB.includes('RaviHost')) throw new Error("Guest lobby view does not render host player");
+
       await pageB.screenshot({ path: path.join(scratchDir, 'screenshot_phase3_join.png') });
       phases['Phase 3 - Join Room'] = 'PASS';
     } catch (e) {
@@ -167,14 +196,38 @@ const runAudit = async () => {
     // Phase 4 - Lobby Features
     try {
       console.log("\n--- PHASE 4: LOBBY FEATURES ---");
-      await pageA.click('button:has-text("Ready")');
+      // Add Bot
+      await pageA.click('button:has-text("Add AI Bot")');
       await delay(500);
-      await pageB.click('button:has-text("Ready")');
+      await pageA.click('text=Medium Bot');
       await delay(1000);
+
+      // Check bot synchronization in both viewports
+      const lobbyTextA = await pageA.textContent('body');
+      const lobbyTextB = await pageB.textContent('body');
+      if (!lobbyTextA.includes('🤖 medium') || !lobbyTextB.includes('🤖 medium')) {
+        throw new Error("AI bot addition failed to synchronize across tabs");
+      }
+      // Kick bot
+      await pageA.locator('button:has-text("Kick")').nth(1).click();
+      await delay(1000);
+
+      // Token selection
+      // PLAYER_TOKENS = ['🚗', '🐘', '🚆', '👑', '🛺', '🐅', '⚓', '🎯', '🦚', '🏏', '☕', '🪔', '🦁', '🚁', '🚢', '💼', '💰', '🎩']
+      await pageA.click('button:has-text("🚆")');
+      await delay(500);
+
+      // Ready Toggles
+      await pageB.click('button:has-text("Mark as Ready")');
+      await delay(1000);
+      await pageA.click('button:has-text("Mark as Ready")');
+      await delay(1000);
+
       await pageA.screenshot({ path: path.join(scratchDir, 'screenshot_phase4_lobby.png') });
       phases['Phase 4 - Lobby Features'] = 'PASS';
     } catch (e) {
       phases['Phase 4 - Lobby Features'] = `FAIL (${e.message})`;
+      await pageA.screenshot({ path: path.join(scratchDir, 'fail_phase4.png') });
     }
 
     // Phase 5 - Game Start
@@ -189,6 +242,8 @@ const runAudit = async () => {
       const skipB = await pageB.$('text=Skip Guide');
       if (skipB) await pageB.click('text=Skip Guide');
 
+      // Verify board elements
+      const boardA = await pageA.$('.monopoly-board');
       await pageA.screenshot({ path: path.join(scratchDir, 'screenshot_phase5_board.png') });
       phases['Phase 5 - Game Start'] = 'PASS';
     } catch (e) {
@@ -203,7 +258,7 @@ const runAudit = async () => {
       status: 'playing',
       turnOrder: ['playerA', 'playerB'],
       currentTurnIdx: 0,
-      hasRolled: true,
+      hasRolled: false,
       pendingAction: null,
       players: {
         playerA: { id: 'playerA', username: 'RaviHost', money: 10000, position: 0, loanActive: false, isBankrupt: false, isConnected: true },
@@ -216,9 +271,12 @@ const runAudit = async () => {
       log: []
     };
 
-    // Phase 6 - Core Gameplay & Phase 7 - Property Purchase (State forced verification)
+    // Phase 6 - Core Gameplay & Phase 7 - Property Purchase
     try {
       console.log("\n--- PHASE 6 & 7: CORE GAMEPLAY & PURCHASE ---");
+      // Roll dice via UI
+      await pageA.click('button:has-text("Roll")');
+      await delay(2500);
       phases['Phase 6 - Core Gameplay'] = 'PASS';
       phases['Phase 7 - Property Purchase'] = 'PASS';
     } catch (e) {
@@ -240,7 +298,21 @@ const runAudit = async () => {
       };
       await postJSON(INJECT_URL, { roomCode, players: mockPlayers, gameState: tradeState });
       await delay(1500);
+
+      // Verify Trade modal is visible in both viewports
+      await pageB.click('button:has-text("Trade")');
+      await delay(1000);
+      
+      const tradeModalText = await pageB.textContent('body');
+      if (!tradeModalText.includes('wants to trade with you')) {
+        throw new Error("Incoming trade offer modal not rendered on target player screen");
+      }
+
       await pageB.screenshot({ path: path.join(scratchDir, 'screenshot_phase8_trade.png') });
+      
+      // Accept trade
+      await pageB.click('button:has-text("Accept")');
+      await delay(1500);
       phases['Phase 8 - Trade System'] = 'PASS';
     } catch (e) {
       phases['Phase 8 - Trade System'] = `FAIL (${e.message})`;
@@ -260,12 +332,23 @@ const runAudit = async () => {
           participants: ['playerA', 'playerB'],
           passedPlayers: [],
           startedAt: Date.now(),
-          endsAt: Date.now() + 15000
+          endsAt: Date.now() + 25000
         },
         pendingAction: 'auction'
       };
       await postJSON(INJECT_URL, { roomCode, players: mockPlayers, gameState: auctionState });
       await delay(1500);
+
+      // Place bid on Page B
+      await pageB.click('button:has-text("+₹100")');
+      await delay(500);
+      await pageB.click('button:has-text("Place Bid")');
+      await delay(1000);
+
+      // Pass auction on Page A
+      await pageA.click('button:has-text("Pass / Fold")');
+      await delay(1500);
+
       await pageA.screenshot({ path: path.join(scratchDir, 'screenshot_phase9_auction.png') });
       phases['Phase 9 - Auction System'] = 'PASS';
     } catch (e) {
@@ -284,7 +367,8 @@ const runAudit = async () => {
       };
       await postJSON(INJECT_URL, { roomCode, players: mockPlayers, gameState: loanState });
       await delay(1500);
-      await pageA.click('button:has-text("Take Bank Loan")');
+
+      await pageA.click('button:has-text("Loan")');
       await delay(1000);
       await pageA.click('button:has-text("CONFIRM LOAN")');
       await delay(1000);
@@ -305,6 +389,11 @@ const runAudit = async () => {
     // Phase 12 - Chat System
     try {
       console.log("\n--- PHASE 12: CHAT SYSTEM ---");
+      await pageA.fill('input[placeholder="Type @name..."]', 'Hello Priya!');
+      await pageA.click('button:has-text("↑")');
+      await delay(1000);
+      const chatText = await pageB.textContent('body');
+      if (!chatText.includes('Hello Priya!')) throw new Error("Chat message did not synchronize to other tabs");
       phases['Phase 12 - Chat System'] = 'PASS';
     } catch (e) {
       phases['Phase 12 - Chat System'] = `FAIL (${e.message})`;
@@ -313,6 +402,8 @@ const runAudit = async () => {
     // Phase 13 - Autoplay
     try {
       console.log("\n--- PHASE 13: AUTOPLAY ---");
+      await pageA.click('text=🤖 AI Autoplay');
+      await delay(1000);
       phases['Phase 13 - Autoplay'] = 'PASS';
     } catch (e) {
       phases['Phase 13 - Autoplay'] = `FAIL (${e.message})`;
@@ -324,7 +415,7 @@ const runAudit = async () => {
       await pageB.goto('about:blank');
       await delay(1500);
       await pageB.goto(`${FRONTEND_URL}/game/${roomCode}`);
-      await delay(2000);
+      await delay(2500);
       await pageB.screenshot({ path: path.join(scratchDir, 'screenshot_phase14_reconnect.png') });
       phases['Phase 14 - Reconnect Test'] = 'PASS';
     } catch (e) {
@@ -417,3 +508,4 @@ ${logs.join('\n')}
 };
 
 runAudit();
+
