@@ -250,23 +250,29 @@ const runAudit = async () => {
       phases['Phase 5 - Game Start'] = `FAIL (${e.message})`;
     }
 
+    // Retrieve actual player IDs from viewports for accurate state injection
+    const playerIdA = await pageA.evaluate(() => sessionStorage.getItem('mi_playerId'));
+    const playerIdB = await pageB.evaluate(() => sessionStorage.getItem('mi_playerId'));
+    console.log(`Fetched actual Player IDs: Host=${playerIdA}, Guest=${playerIdB}`);
+
     const mockPlayers = [
-      { id: 'playerA', username: 'RaviHost', ready: true, connected: true },
-      { id: 'playerB', username: 'PriyaPlayer', ready: true, connected: true }
+      { id: playerIdA, username: 'RaviHost', ready: true, connected: true },
+      { id: playerIdB, username: 'PriyaPlayer', ready: true, connected: true }
     ];
+
     const baseGameState = {
       status: 'playing',
-      turnOrder: ['playerA', 'playerB'],
+      turnOrder: [playerIdA, playerIdB],
       currentTurnIdx: 0,
       hasRolled: false,
       pendingAction: null,
       players: {
-        playerA: { id: 'playerA', username: 'RaviHost', money: 10000, position: 0, loanActive: false, isBankrupt: false, isConnected: true },
-        playerB: { id: 'playerB', username: 'PriyaPlayer', money: 10000, position: 0, loanActive: false, isBankrupt: false, isConnected: true }
+        [playerIdA]: { id: playerIdA, username: 'RaviHost', money: 10000, position: 0, loanActive: false, isBankrupt: false, isConnected: true },
+        [playerIdB]: { id: playerIdB, username: 'PriyaPlayer', money: 10000, position: 0, loanActive: false, isBankrupt: false, isConnected: true }
       },
       properties: {
-        1: { ownerId: 'playerA', houses: 0, hotel: false, mortgaged: false, tileId: 1 },
-        3: { ownerId: 'playerB', houses: 0, hotel: false, mortgaged: false, tileId: 3 }
+        1: { ownerId: playerIdA, houses: 0, hotel: false, mortgaged: false, tileId: 1 },
+        3: { ownerId: playerIdB, houses: 0, hotel: false, mortgaged: false, tileId: 3 }
       },
       log: []
     };
@@ -274,6 +280,10 @@ const runAudit = async () => {
     // Phase 6 - Core Gameplay & Phase 7 - Property Purchase
     try {
       console.log("\n--- PHASE 6 & 7: CORE GAMEPLAY & PURCHASE ---");
+      // Inject base state to guarantee Host turn starts first
+      await postJSON(INJECT_URL, { roomCode, players: mockPlayers, gameState: baseGameState });
+      await delay(1500);
+
       // Roll dice via UI
       await pageA.click('button:has-text("Roll")');
       await delay(2500);
@@ -289,8 +299,8 @@ const runAudit = async () => {
       const tradeState = {
         ...baseGameState,
         activeTrade: {
-          fromPlayerId: 'playerA',
-          toPlayerId: 'playerB',
+          fromPlayerId: playerIdA,
+          toPlayerId: playerIdB,
           offer: { propertyIds: [1], money: 100 },
           request: { propertyIds: [3], money: 200 },
           status: 'pending'
@@ -327,9 +337,9 @@ const runAudit = async () => {
           tileId: 1,
           ownerId: null,
           highBid: 100,
-          highBidderId: 'playerA',
-          bids: { playerA: 100 },
-          participants: ['playerA', 'playerB'],
+          highBidderId: playerIdA,
+          bids: { [playerIdA]: 100 },
+          participants: [playerIdA, playerIdB],
           passedPlayers: [],
           startedAt: Date.now(),
           endsAt: Date.now() + 25000
@@ -361,8 +371,8 @@ const runAudit = async () => {
       const loanState = {
         ...baseGameState,
         players: {
-          playerA: { id: 'playerA', username: 'RaviHost', money: -500, position: 0, loanActive: false, isBankrupt: false, isConnected: true },
-          playerB: { id: 'playerB', username: 'PriyaPlayer', money: 10000, position: 0, loanActive: false, isBankrupt: false, isConnected: true }
+          [playerIdA]: { id: playerIdA, username: 'RaviHost', money: -500, position: 0, loanActive: false, isBankrupt: false, isConnected: true },
+          [playerIdB]: { id: playerIdB, username: 'PriyaPlayer', money: 10000, position: 0, loanActive: false, isBankrupt: false, isConnected: true }
         }
       };
       await postJSON(INJECT_URL, { roomCode, players: mockPlayers, gameState: loanState });
