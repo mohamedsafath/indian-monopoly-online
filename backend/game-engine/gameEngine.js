@@ -2507,7 +2507,7 @@ const getClientState = (gameState) => ({
         passedPlayers: gameState.activeAuction.passedPlayers,
       }
     : null,
-  log: gameState.log.slice(-50),
+  log: (gameState.log || []).slice(-50),
   // Deck positions (so client can show "X cards remaining" if wanted)
   chanceIndex:    gameState.chanceIndex,
   communityIndex: gameState.communityIndex,
@@ -2706,22 +2706,31 @@ const _liquidateAssetsForDebt = (gameState, playerId, debtAmount) => {
 const takeLoan = (gameState, playerId, amount) => {
   const player = gameState.players[playerId];
   if (!player || player.isBankrupt) return fail('Invalid player');
-  if (player.loanActive) return fail('You already have an active loan');
-  if (amount < 500 || amount > 5000 || amount % 500 !== 0) {
-    return fail('Loan amount must be between ₹500 and ₹5,000 in increments of ₹500');
+  if (player.loanActive) return fail('You already have an active loan. You cannot take a new loan while an existing loan is active.');
+  
+  const maxLoanLimit = 5000;
+  if (amount < 500 || amount > maxLoanLimit || amount % 500 !== 0) {
+    return fail(`Loan amount must be between ₹500 and ₹${fmt(maxLoanLimit)} in increments of ₹500`);
   }
 
+  const flatInterestRate = 0.20; // 20% flat interest rate
+  const calculatedInterest = Math.floor(amount * flatInterestRate);
+  const totalDueAmount = amount + calculatedInterest;
+
   player.loanActive = true;
-  player.loanAmount = amount;
-  player.loanRepaymentAmount = Math.floor(amount * 1.2);
+  player.loanAmount = amount; // principal
+  player.loanPrincipal = amount;
+  player.loanInterest = calculatedInterest;
+  player.loanRepaymentAmount = totalDueAmount; // dueAmount
+  player.loanDueAmount = totalDueAmount;
   player.loanTurnsRemaining = 5;
   player.money += amount;
   player.loansTakenCount = (player.loansTakenCount ?? 0) + 1;
 
   const events = [evt(
     EVENT_TYPES.LOAN_APPROVED,
-    { playerId, amount, repaymentAmount: player.loanRepaymentAmount, turnsRemaining: 5, newBalance: player.money },
-    `🏦 ${player.username} took ₹${fmt(amount)} emergency loan`
+    { playerId, amount, repaymentAmount: totalDueAmount, turnsRemaining: 5, newBalance: player.money, principal: amount, interest: calculatedInterest, dueAmount: totalDueAmount },
+    `🏦 ${player.username} took ₹${fmt(amount)} emergency loan (Principal: ₹${fmt(amount)}, Interest: ₹${fmt(calculatedInterest)}, Due: ₹${fmt(totalDueAmount)})`
   )];
 
   _appendLog(gameState, events);
@@ -2744,7 +2753,10 @@ const repayLoan = (gameState, playerId) => {
   player.money -= cost;
   player.loanActive = false;
   player.loanAmount = 0;
+  player.loanPrincipal = 0;
+  player.loanInterest = 0;
   player.loanRepaymentAmount = 0;
+  player.loanDueAmount = 0;
   player.loanTurnsRemaining = 0;
 
   const events = [evt(

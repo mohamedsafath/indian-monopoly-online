@@ -20,7 +20,7 @@ connectDB().then(() => {
   seedDefaultUsers();
 });
 
-const { mountGameSocket, rooms, destroyRoom } = require("./socket/gameSocket");
+const { mountGameSocket, rooms, destroyRoom, broadcastGameState, emitRoomUpdated } = require("./socket/gameSocket");
 
 const app = express();
 app.set("trust proxy", 1);
@@ -596,6 +596,50 @@ adminRouter.get("/players", verifyAdmin, async (req, res) => {
 app.use("/api/admin", adminRouter);
 
 app.use("/api/auth", authLimiter, authRouter);
+
+// QA State Injection Endpoint for verification suite
+app.post("/api/qa/inject", (req, res) => {
+  const { roomCode, gameState, players, status } = req.body;
+  if (!roomCode) return res.status(400).json({ ok: false, error: "Missing roomCode" });
+  
+  const targetCode = String(roomCode).toUpperCase();
+  let room = rooms.get(targetCode);
+  if (!room) {
+    room = {
+      code: targetCode,
+      hostId: players?.[0]?.id || 'host-qa',
+      status: status || 'playing',
+      players: players || [],
+      spectators: [],
+      chatHistory: []
+    };
+    rooms.set(targetCode, room);
+  }
+  
+  if (gameState) {
+    room.gameState = gameState;
+    room.status = status || 'playing';
+  }
+
+  // Update players array if provided
+  if (players) {
+    room.players = players;
+  }
+
+  if (typeof io !== 'undefined' && io) {
+    broadcastGameState(io, room);
+    emitRoomUpdated(io, room);
+  }
+  
+  const roomClean = {
+    code: room.code,
+    hostId: room.hostId,
+    status: room.status,
+    players: room.players,
+    gameState: room.gameState
+  };
+  res.json({ ok: true, room: roomClean });
+});
 
 // Basic route
 app.get("/", (req, res) => {

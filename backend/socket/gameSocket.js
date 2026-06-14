@@ -789,16 +789,7 @@ const raiseBotCash = (io, room, botId) => {
   const player = gameState.players[botId];
   if (player.money >= 0) return false;
 
-  // 1. Take loan if not active
-  if (!player.loanActive) {
-    const debt = -player.money;
-    const amount = Math.min(5000, Math.max(500, Math.ceil(debt / 500) * 500));
-    console.log(`🤖 Bot ${player.username} taking loan of ${amount} to resolve debt of ${debt}`);
-    const success = _dispatch(io, null, room, botId, takeLoan, [amount]);
-    if (success) return true;
-  }
-
-  // 2. Sell hotels
+  // 1. Sell hotels
   for (const tileId of Object.keys(gameState.properties)) {
     const prop = gameState.properties[tileId];
     if (prop.ownerId === botId && prop.hotel) {
@@ -808,7 +799,7 @@ const raiseBotCash = (io, room, botId) => {
     }
   }
 
-  // 3. Sell houses
+  // 2. Sell houses
   for (const tileId of Object.keys(gameState.properties)) {
     const prop = gameState.properties[tileId];
     if (prop.ownerId === botId && prop.houses > 0) {
@@ -818,7 +809,7 @@ const raiseBotCash = (io, room, botId) => {
     }
   }
 
-  // 4. Mortgage properties not part of a monopoly first
+  // 3. Mortgage properties not part of a monopoly first
   const myProperties = Object.keys(gameState.properties).filter(tileId => {
     const prop = gameState.properties[tileId];
     return prop.ownerId === botId && !prop.mortgaged;
@@ -840,6 +831,15 @@ const raiseBotCash = (io, room, botId) => {
     }
   }
 
+  // 4. Take loan if not active (strategic/emergency necessity)
+  if (!player.loanActive) {
+    const debt = -player.money;
+    const amount = Math.min(5000, Math.max(500, Math.ceil(debt / 500) * 500));
+    console.log(`🤖 Bot ${player.username} taking loan of ${amount} to resolve debt of ${debt}`);
+    const success = _dispatch(io, null, room, botId, takeLoan, [amount]);
+    if (success) return true;
+  }
+
   // 5. Declare bankruptcy if no assets left
   console.log(`🤖 Bot ${player.username} declaring bankruptcy`);
   return _dispatch(io, null, room, botId, declareBankruptcy, []);
@@ -848,11 +848,11 @@ const raiseBotCash = (io, room, botId) => {
 const _getDynamicUpgradeReserve = (gameState, player) => {
   const difficulty = player.difficulty || 'medium';
   if (difficulty === 'easy') {
-    return 2000;
+    return 3000;
   }
-
-  let baseReserve = difficulty === 'hard' ? 600 : 1000;
-  let opponentRentMultiplier = difficulty === 'hard' ? 0.25 : 0.50;
+  // Hard/Medium bots maintain ₹3000 - ₹5000 reserve cash dynamically
+  let baseReserve = difficulty === 'hard' ? 4000 : 3000;
+  let opponentRentMultiplier = difficulty === 'hard' ? 0.35 : 0.50;
 
   // Find the highest current rent of any active opponent's properties to protect against immediate bankruptcy
   let maxOpponentRent = 0;
@@ -877,7 +877,7 @@ const _getDynamicUpgradeReserve = (gameState, player) => {
     }
   }
 
-  return baseReserve + Math.floor(maxOpponentRent * opponentRentMultiplier);
+  return Math.min(5000, baseReserve + Math.floor(maxOpponentRent * opponentRentMultiplier));
 };
 
 const upgradeBotProperties = (io, room, botId) => {
@@ -888,26 +888,42 @@ const upgradeBotProperties = (io, room, botId) => {
   const reserve = _getDynamicUpgradeReserve(gameState, player);
   if (player.money < reserve) return false;
 
+  // Evaluate candidate properties to upgrade and sort by highest rent increase first (Positive ROI optimization)
+  const upgradeCandidates = [];
+
   for (const tileId of Object.keys(gameState.properties)) {
     const tile = TILE_BY_ID[tileId];
     if (!tile || !tile.houseCost) continue;
 
-    // Check hotel upgrade first
-    const checkHotel = canBuildHotel(gameState.properties, botId, Number(tileId), player.position);
+    const propId = Number(tileId);
+    const checkHotel = canBuildHotel(gameState.properties, botId, propId, player.position);
     if (checkHotel.canBuild && player.money >= reserve + tile.houseCost) {
-      console.log(`🤖 Bot ${player.username} upgrading to hotel on tile ${tileId} (reserve: ${reserve})`);
-      return _dispatch(io, null, room, botId, buildHotel, [Number(tileId)]);
+      // Rent increase from 4 houses to hotel
+      const rentDiff = tile.rent[5] - tile.rent[4];
+      upgradeCandidates.push({ tileId: propId, type: 'hotel', cost: tile.houseCost, rentDiff, roi: rentDiff / tile.houseCost });
     }
 
-    // Check house upgrade
-    const checkHouse = canBuildHouse(gameState.properties, botId, Number(tileId), player.position);
+    const checkHouse = canBuildHouse(gameState.properties, botId, propId, player.position);
     if (checkHouse.canBuild && player.money >= reserve + tile.houseCost) {
-      console.log(`🤖 Bot ${player.username} building house on tile ${tileId} (reserve: ${reserve})`);
-      return _dispatch(io, null, room, botId, buildHouse, [Number(tileId)]);
+      const currentHouses = gameState.properties[tileId].houses || 0;
+      const rentDiff = tile.rent[currentHouses + 1] - tile.rent[currentHouses];
+      upgradeCandidates.push({ tileId: propId, type: 'house', cost: tile.houseCost, rentDiff, roi: rentDiff / tile.houseCost });
     }
   }
 
-  return false;
+  if (upgradeCandidates.length === 0) return false;
+
+  // Prioritize highest rent difference/ROI first
+  upgradeCandidates.sort((a, b) => b.rentDiff - a.rentDiff);
+
+  const bestUpgrade = upgradeCandidates[0];
+  if (bestUpgrade.type === 'hotel') {
+    console.log(`🤖 Bot ${player.username} upgrading to hotel on tile ${bestUpgrade.tileId} (rent diff: ${bestUpgrade.rentDiff}, reserve: ${reserve})`);
+    return _dispatch(io, null, room, botId, buildHotel, [bestUpgrade.tileId]);
+  } else {
+    console.log(`🤖 Bot ${player.username} building house on tile ${bestUpgrade.tileId} (rent diff: ${bestUpgrade.rentDiff}, reserve: ${reserve})`);
+    return _dispatch(io, null, room, botId, buildHouse, [bestUpgrade.tileId]);
+  }
 };
 
 const executeBotAuctionDecision = async (io, room, botId) => {
@@ -923,20 +939,20 @@ const executeBotAuctionDecision = async (io, room, botId) => {
   // Dynamic strategic ceiling calculations based on bot difficulty
   const difficulty = player.difficulty || 'medium';
   let ceilingFactor = 0.80 + Math.random() * 0.10; // Default Medium
-  let completesBoost = 1.15;
-  let defensiveBoost = 0.95;
+  let completesBoost = 1.25;
+  let defensiveBoost = 1.05;
 
   if (difficulty === 'easy') {
     ceilingFactor = 0.50 + Math.random() * 0.15;
-    completesBoost = 0.70;
-    defensiveBoost = 0.60;
+    completesBoost = 0.75;
+    defensiveBoost = 0.65;
   } else if (difficulty === 'hard') {
     ceilingFactor = 0.95 + Math.random() * 0.15;
-    completesBoost = 1.50;
-    defensiveBoost = 1.25;
+    completesBoost = 1.60;
+    defensiveBoost = 1.35;
     // Cash-rich extra aggressive bidding
-    if (player.money > 2000) {
-      const cashBoost = Math.min(0.25, (player.money / 20000) * 0.15);
+    if (player.money > 3000) {
+      const cashBoost = Math.min(0.35, (player.money / 20000) * 0.20);
       ceilingFactor += cashBoost;
     }
   }
@@ -954,15 +970,20 @@ const executeBotAuctionDecision = async (io, room, botId) => {
     chatComment = `Not so fast! I can't let you get a monopoly on ${tile.group} that easily! 😉`;
   }
 
-  const ceiling = Math.floor(tile.price * ceilingFactor);
-  
+  // Cap auction ceiling to ensure bot retains reserve cash unless completing a monopoly
+  let targetCeiling = Math.floor(tile.price * ceilingFactor);
+  if (!isSpecialBid && player.money - targetCeiling < 2000) {
+    // If not completing monopoly or defensive block, keep a basic cash buffer
+    targetCeiling = Math.max(0, player.money - 2000);
+  }
+
   // Random human-like increments: 50, 100, 150, or 200
   const possibleIncrements = [50, 100, 150, 200];
   const randInc = possibleIncrements[Math.floor(Math.random() * possibleIncrements.length)];
   const nextBid = auction.highBid + randInc;
 
-  if (auction.highBid < ceiling && player.money >= nextBid) {
-    console.log(`🤖 Bot ${player.username} placing auction bid of ${nextBid} for ${tile.name} (ceiling: ${ceiling})`);
+  if (auction.highBid < targetCeiling && player.money >= nextBid) {
+    console.log(`🤖 Bot ${player.username} placing auction bid of ${nextBid} for ${tile.name} (ceiling: ${targetCeiling})`);
     
     // Post chat commentary occasionally or during high stakes
     if (isSpecialBid && Math.random() < 0.6) {
@@ -973,7 +994,7 @@ const executeBotAuctionDecision = async (io, room, botId) => {
 
     _dispatch(io, null, room, botId, placeBid, [nextBid]);
   } else {
-    console.log(`🤖 Bot ${player.username} passing on auction for ${tile.name} (highBid: ${auction.highBid}, ceiling: ${ceiling})`);
+    console.log(`🤖 Bot ${player.username} passing on auction for ${tile.name} (highBid: ${auction.highBid}, ceiling: ${targetCeiling})`);
     if (Math.random() < 0.15) {
       sendBotChatMessage(io, room, botId, `I'm out of this auction for ${tile.name}. Too rich for my blood! 💸`);
     }
@@ -1103,18 +1124,21 @@ const executeBotTurn = async (io, room, botId) => {
     return;
   }
 
-  // 2. Jail handling
+  // 2. Jail handling: evaluate staying jailed based on game stage
   if (player.inJail) {
     if (!gameState.hasRolled) {
       // Escape jail heuristics
+      const totalPropertiesOwnedByAll = Object.values(gameState.properties).filter(p => p.ownerId).length;
+      const isEarlyGame = totalPropertiesOwnedByAll < 15; // Stay jailed is strategic in late game, escape is priority early game
+
       if (player.jailCard) {
         console.log(`\n🤖 [BOT]\nName: ${player.username}\nMoney: ₹${player.money}\nTile: ${currentTile.name}\nDecision: Escape Jail (Jail Card)\n`);
         _dispatch(io, null, room, botId, useJailCard, []);
-      } else if (player.money >= 1000) {
+      } else if (isEarlyGame && player.money >= 1000) {
         console.log(`\n🤖 [BOT]\nName: ${player.username}\nMoney: ₹${player.money}\nTile: ${currentTile.name}\nDecision: Escape Jail (Pay Fine)\n`);
         _dispatch(io, null, room, botId, payJailFine, []);
       } else {
-        console.log(`\n🤖 [BOT]\nName: ${player.username}\nMoney: ₹${player.money}\nTile: ${currentTile.name}\nDecision: Escape Jail (Roll Dice)\n`);
+        console.log(`\n🤖 [BOT]\nName: ${player.username}\nMoney: ₹${player.money}\nTile: ${currentTile.name}\nDecision: Escape Jail (Stay Jailed & Roll Dice)\n`);
         _dispatch(io, null, room, botId, rollDice, []);
       }
     } else {
@@ -1132,7 +1156,26 @@ const executeBotTurn = async (io, room, botId) => {
     // Already rolled
     if (gameState.pendingAction === 'buy_decision') {
       const tile = TILE_BY_ID[player.position];
+      
+      // Property purchase AI decision scoring
+      let shouldBuy = false;
       if (tile && player.money >= tile.price) {
+        const difficulty = player.difficulty || 'medium';
+        const completesMonopoly = _completesMonopolyForPlayer(gameState, botId, player.position);
+        
+        // Always buy if it completes a monopoly, or if player has a healthy cash reserve after purchase
+        const minReserveLimit = difficulty === 'easy' ? 1000 : 3000;
+        if (completesMonopoly || (player.money - tile.price >= minReserveLimit)) {
+          shouldBuy = true;
+        } else if (tile.type === 'railway' || tile.type === 'utility') {
+          // Railways and utilities are good passive income generators, buy if money is above ₹1500
+          if (player.money - tile.price >= 1500) {
+            shouldBuy = true;
+          }
+        }
+      }
+
+      if (shouldBuy) {
         console.log(`\n🤖 [BOT]\nName: ${player.username}\nMoney: ₹${player.money}\nTile: ${currentTile.name}\nDecision: Buy Property (${tile.name})\n`);
         _dispatch(io, null, room, botId, buyProperty, []);
       } else {
@@ -2906,5 +2949,7 @@ module.exports = {
   destroyRoom,
   socketToRoom,
   triggerBotCycle,
-  evaluateBotTradeDecision
+  evaluateBotTradeDecision,
+  broadcastGameState,
+  emitRoomUpdated
 };

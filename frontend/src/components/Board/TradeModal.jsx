@@ -234,25 +234,33 @@ export function TradeModal({
               trade={activeTrade}
               players={players}
               properties={properties}
+              disabled={submitting}
               onAccept={async () => {
+                setSubmitting(true);
                 try {
                   setError('');
                   await onAcceptTrade();
                   onClose();
                 } catch (err) {
                   setError(err.message || 'Failed to accept trade');
+                } finally {
+                  setSubmitting(false);
                 }
               }}
               onReject={async () => {
+                setSubmitting(true);
                 try {
                   setError('');
                   await onRejectTrade();
                   onClose();
                 } catch (err) {
                   setError(err.message || 'Failed to reject trade');
+                } finally {
+                  setSubmitting(false);
                 }
               }}
               onCounter={() => {
+                if (submitting) return;
                 // Pre-fill counter-offer states in reverse safely
                 setTargetId(activeTrade.fromPlayerId);
                 
@@ -278,22 +286,29 @@ export function TradeModal({
               Waiting for {players[activeTrade.toPlayerId]?.username} to respond…
             </div>
             <button
+              disabled={submitting}
               onClick={async () => {
+                setSubmitting(true);
                 try {
                   setError('');
                   await onCancelTrade();
                   onClose();
                 } catch (err) {
                   setError(err.message || 'Failed to cancel trade');
+                } finally {
+                  setSubmitting(false);
                 }
               }}
               style={{
                 padding: '8px 20px', borderRadius: 8,
-                background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)',
-                color: '#f87171', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+                background: submitting ? 'rgba(255,255,255,0.03)' : 'rgba(239,68,68,0.1)',
+                border: submitting ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(239,68,68,0.3)',
+                color: submitting ? '#6b7280' : '#f87171',
+                fontWeight: 700, fontSize: 12,
+                cursor: submitting ? 'not-allowed' : 'pointer',
               }}
             >
-              Cancel Trade
+              {submitting ? 'Cancelling…' : 'Cancel Trade'}
             </button>
           </div>
         )}
@@ -487,7 +502,7 @@ export function TradeModal({
 }
 
 // ── Trade review component (shown to trade target) ────────────────────────────
-function TradeReview({ trade, players, properties, onAccept, onReject, onCounter }) {
+function TradeReview({ trade, players, properties, onAccept, onReject, onCounter, disabled }) {
   const from = players[trade.fromPlayerId];
   const to   = players[trade.toPlayerId];
 
@@ -508,26 +523,33 @@ function TradeReview({ trade, players, properties, onAccept, onReject, onCounter
       <div style={{ display: 'flex', gap: 6 }}>
         <button
           onClick={onAccept}
+          disabled={disabled}
           style={{
             flex: 1, padding: '10px', borderRadius: 8,
-            background: 'linear-gradient(135deg,#166534,#22c55e)',
-            border: 'none', color: '#fff', fontWeight: 800, fontSize: 11, cursor: 'pointer',
+            background: disabled ? 'rgba(255,255,255,0.03)' : 'linear-gradient(135deg,#166534,#22c55e)',
+            border: 'none', color: disabled ? '#6b7280' : '#fff', fontWeight: 800, fontSize: 11,
+            cursor: disabled ? 'not-allowed' : 'pointer',
           }}
         >✓ Accept</button>
         <button
           onClick={onCounter}
+          disabled={disabled}
           style={{
             flex: 1, padding: '10px', borderRadius: 8,
-            background: 'linear-gradient(135deg,#9a3412,#ea580c)',
-            border: 'none', color: '#fff', fontWeight: 800, fontSize: 11, cursor: 'pointer',
+            background: disabled ? 'rgba(255,255,255,0.03)' : 'linear-gradient(135deg,#9a3412,#ea580c)',
+            border: 'none', color: disabled ? '#6b7280' : '#fff', fontWeight: 800, fontSize: 11,
+            cursor: disabled ? 'not-allowed' : 'pointer',
           }}
         >⚡ Counter</button>
         <button
           onClick={onReject}
+          disabled={disabled}
           style={{
             flex: 1, padding: '10px', borderRadius: 8,
-            background: 'rgba(239,68,68,0.12)',
-            border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', fontWeight: 800, fontSize: 11, cursor: 'pointer',
+            background: disabled ? 'rgba(255,255,255,0.02)' : 'rgba(239,68,68,0.12)',
+            border: disabled ? '1px solid rgba(255,255,255,0.05)' : '1px solid rgba(239,68,68,0.3)',
+            color: disabled ? '#6b7280' : '#f87171', fontWeight: 800, fontSize: 11,
+            cursor: disabled ? 'not-allowed' : 'pointer',
           }}
         >✕ Reject</button>
       </div>
