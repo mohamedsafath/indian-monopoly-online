@@ -177,6 +177,7 @@ const EVENT_TYPES = Object.freeze({
   AUCTION_BID:          'AUCTION_BID',
   AUCTION_WON:          'AUCTION_WON',
   AUCTION_NO_SALE:      'AUCTION_NO_SALE',
+  AUCTION_PASSED:       'AUCTION_PASSED',
 
   // Loans
   LOAN_APPROVED:        'LOAN_APPROVED',
@@ -2149,6 +2150,36 @@ const counterTrade = (gameState, playerId, offer, request) => {
  * @param {number} tileId
  * @returns {GameEvent}
  */
+/**
+ * _checkAuctionAutoPass — Automatically passes any participants who cannot afford
+ * the minimum bid, immediately concluding the auction if necessary.
+ */
+const _checkAuctionAutoPass = (gameState, events = []) => {
+  const auction = gameState.activeAuction;
+  if (!auction) return;
+  
+  const minBid = auction.highBid > 0 ? auction.highBid + 1 : 1;
+  const activeParticipants = auction.participants.filter(pid => !auction.passedPlayers.includes(pid));
+  
+  activeParticipants.forEach(pid => {
+    const player = gameState.players[pid];
+    if (player && player.money < minBid) {
+      auction.passedPlayers.push(pid);
+      events.push(evt(
+        EVENT_TYPES.AUCTION_PASSED,
+        { playerId: pid, tileId: auction.tileId, auto: true },
+        `❌ ${player.username} cannot afford the minimum bid of ₹${fmt(minBid)} and automatically passed`
+      ));
+    }
+  });
+
+  const remaining = auction.participants.filter(pid => !auction.passedPlayers.includes(pid));
+  if (remaining.length === 0 || (remaining.length === 1 && auction.highBidderId)) {
+    const concludeEvents = _concludeAuction(gameState);
+    events.push(...concludeEvents);
+  }
+};
+
 const _startAuction = (gameState, tileId, disqualifiedPlayerIds = [], ownerId = null) => {
   const tile            = TILE_BY_ID[tileId];
   const activePlayers   = Object.values(gameState.players)
@@ -2164,15 +2195,20 @@ const _startAuction = (gameState, tileId, disqualifiedPlayerIds = [], ownerId = 
     participants:  activePlayers,
     passedPlayers: [],
     startedAt:     Date.now(),
+    endsAt:        Date.now() + 15000, // 15-second initial timer
   };
 
   gameState.pendingAction = 'auction';
 
-  return evt(
+  const events = [evt(
     EVENT_TYPES.AUCTION_STARTED,
-    { tileId, tile, minimumBid: 1, participants: activePlayers, ownerId },
+    { tileId, tile, minimumBid: 1, participants: activePlayers, ownerId, endsAt: gameState.activeAuction.endsAt },
     `🔨 Auction started for ${tile.name}! Minimum bid: ₹1`,
-  );
+  )];
+
+  _checkAuctionAutoPass(gameState, events);
+
+  return events;
 };
 
 /**
@@ -2191,6 +2227,8 @@ const placeBid = (gameState, playerId, amount) => {
   if (!player || player.isBankrupt)           return fail('Invalid player');
   if (!auction.participants.includes(playerId)) return fail('You are not part of this auction');
   if (auction.passedPlayers.includes(playerId)) return fail('You already passed on this auction');
+  if (auction.highBidderId === playerId)       return fail('You are already the highest bidder');
+
   if (typeof amount !== 'number' || !Number.isInteger(amount) || amount < 1) {
     return fail('Bid amount must be a valid positive integer');
   }
@@ -2200,21 +2238,18 @@ const placeBid = (gameState, playerId, amount) => {
   auction.highBid      = amount;
   auction.highBidderId = playerId;
   auction.bids[playerId] = amount;
+  auction.endsAt       = Date.now() + 15000; // Reset 15s timer on every successful bid!
 
   const tile   = TILE_BY_ID[auction.tileId];
   const events = [evt(
     EVENT_TYPES.AUCTION_BID,
-    { playerId, amount, tileId: auction.tileId },
+    { playerId, amount, tileId: auction.tileId, endsAt: auction.endsAt },
     `${player.username} bid ₹${fmt(amount)} for ${tile.name}`,
   )];
 
   _appendLog(gameState, events);
 
-  const remaining = auction.participants.filter((id) => !auction.passedPlayers.includes(id));
-  if (remaining.length === 1) {
-    const concludeEvents = _concludeAuction(gameState);
-    events.push(...concludeEvents);
-  }
+  _checkAuctionAutoPass(gameState, events);
 
   return ok(events);
 };
@@ -2322,20 +2357,22 @@ const _concludeAuction = (gameState) => {
       seller.money += auction.highBid;
     }
 
+    const passedNames = auction.passedPlayers.map(pid => gameState.players[pid]?.username || pid).join(', ') || 'None';
+    const summaryMsg = `🏁 [Auction Summary] Property: ${tile.name} | Winner: ${winner.username} | Winning Bid: ₹${fmt(auction.highBid)} | Players Passed: [${passedNames}]`;
+
     events.push(evt(
       EVENT_TYPES.AUCTION_WON,
       { winnerId: auction.highBidderId, tileId: auction.tileId, amount: auction.highBid, sellerId: auction.ownerId || null },
-      hasSeller
-        ? `🏆 ${winner.username} won ${tile.name} at auction from ${gameState.players[auction.ownerId].username} for ₹${fmt(auction.highBid)}!`
-        : `🏆 ${winner.username} won ${tile.name} at auction for ₹${fmt(auction.highBid)}!`,
+      summaryMsg,
     ));
   } else {
+    const passedNames = auction.passedPlayers.map(pid => gameState.players[pid]?.username || pid).join(', ') || 'None';
+    const summaryMsg = `🏁 [Auction Summary - No Sale] Property: ${tile.name} | Winner: None | Winning Bid: ₹0 | Players Passed: [${passedNames}]`;
+
     events.push(evt(
       EVENT_TYPES.AUCTION_NO_SALE,
       { tileId: auction.tileId },
-      hasSeller
-        ? `${tile.name} received no bids — remains owned by ${gameState.players[auction.ownerId].username}`
-        : `${tile.name} received no bids — remains unsold`,
+      summaryMsg,
     ));
   }
 
@@ -2989,6 +3026,17 @@ const _checkKickHostVoteResolution = (gameState, events) => {
   }
 };
 
+/**
+ * concludeActiveAuction — Public wrapper to conclude the active auction.
+ * Used by the socket layer timer to force close the auction on timeout.
+ *
+ * @param {Object} gameState
+ * @returns {GameEvent[]}
+ */
+const concludeActiveAuction = (gameState) => {
+  return _concludeAuction(gameState);
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ── EXPORTS ───────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
@@ -3047,6 +3095,7 @@ module.exports = {
   placeBid,
   passAuction,
   auctionProperty,
+  concludeActiveAuction,
   getPlayerRankingData,
 
   // Utilities (exported for testing)

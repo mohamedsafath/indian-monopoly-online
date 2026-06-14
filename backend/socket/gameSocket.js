@@ -71,6 +71,7 @@ const {
   placeBid,
   passAuction,
   auctionProperty,
+  concludeActiveAuction,
 
   // Constants
   EVENT_TYPES,
@@ -297,6 +298,33 @@ const _recordCompletedMatch = (room) => {
   }
 };
 
+const syncAuctionTimer = (io, room) => {
+  if (room.auctionTimer) {
+    clearTimeout(room.auctionTimer);
+    room.auctionTimer = null;
+  }
+
+  if (room.gameState && room.gameState.activeAuction) {
+    const endsAt = room.gameState.activeAuction.endsAt;
+    const delay = Math.max(0, endsAt - Date.now());
+
+    room.auctionTimer = setTimeout(() => {
+      if (room.gameState && room.gameState.activeAuction) {
+        console.log(`⏰ [Auction Timer] Auction expired in room ${room.code}. Concluding.`);
+        try {
+          const events = concludeActiveAuction(room.gameState);
+          broadcastEvents(io, room, events);
+          broadcastGameState(io, room);
+          triggerBotCycle(io, room);
+        } catch (e) {
+          console.error('[Auction Timer Expiry Error]', e);
+        }
+      }
+      room.auctionTimer = null;
+    }, delay);
+  }
+};
+
 const broadcastGameState = (io, room) => {
   if (!room.gameState) return;
   room.players.forEach((p) => {
@@ -313,6 +341,9 @@ const broadcastGameState = (io, room) => {
   }
 
   saveRoom(room);
+
+  // Sync Auction Timer
+  syncAuctionTimer(io, room);
 };
 
 /**
