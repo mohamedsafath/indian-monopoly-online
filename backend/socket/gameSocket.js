@@ -471,7 +471,7 @@ const startAfkTimer = (io, room) => {
     if (!cp) return;
 
     const player = room.players.find(p => p.id === cp.id);
-    if (player) {
+    if (player && !player.isBot) {
       player.autoplay = true;
       saveRoom(room);
       io.to(room.code).emit('room-updated', envelope(true, { room: lobbySnapshot(room) }));
