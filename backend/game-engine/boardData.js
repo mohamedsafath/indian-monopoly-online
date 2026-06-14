@@ -961,6 +961,18 @@ const canBuildHouse = (properties, playerId, tileId, playerPosition) => {
     return { canBuild: false, reason: 'Cannot build if any property in the color group is mortgaged' };
   }
 
+  // Enforce Even Building Rule: cannot exceed any sibling property's houses by more than 1
+  const currentHouses = prop.houses || 0;
+  const isUneven = groupTiles.some((id) => {
+    if (id === Number(tileId)) return false;
+    const siblingProp = properties[id];
+    const siblingHouses = siblingProp?.hotel ? 5 : (siblingProp?.houses || 0);
+    return siblingHouses < currentHouses;
+  });
+  if (isUneven) {
+    return { canBuild: false, reason: 'Must build evenly across color group' };
+  }
+
   return { canBuild: true, reason: null };
 };
 
@@ -990,6 +1002,16 @@ const canBuildHotel = (properties, playerId, tileId, playerPosition) => {
   const hasMortgaged = groupTiles.some((id) => properties[id]?.mortgaged);
   if (hasMortgaged) {
     return { canBuild: false, reason: 'Cannot build if any property in the color group is mortgaged' };
+  }
+
+  // Enforce Even Building Rule for Hotels: all sibling properties must have at least 4 houses (or a hotel)
+  const isUnevenHotel = groupTiles.some((id) => {
+    if (id === Number(tileId)) return false;
+    const siblingProp = properties[id];
+    return !siblingProp || (!siblingProp.hotel && (siblingProp.houses || 0) < 4);
+  });
+  if (isUnevenHotel) {
+    return { canBuild: false, reason: 'Must build 4 houses on all sibling properties before building a hotel' };
   }
 
   return { canBuild: true, reason: null };
