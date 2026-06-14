@@ -1422,64 +1422,33 @@ const triggerBotCycle = (io, room) => {
 
   // 3. Check if it's a bot's standard turn
   const activePlayer = currentPlayer(room.gameState);
-  if (activePlayer && room.players.find(p => p.id === activePlayer.id && (p.isBot || p.autoplay || !p.connected))) {
-    const botId = activePlayer.id;
+  if (activePlayer) {
+    const matchingPlayer = room.players.find(p => p.id === activePlayer.id);
+    if (matchingPlayer && (matchingPlayer.isBot || matchingPlayer.autoplay || !matchingPlayer.connected)) {
+      const botId = activePlayer.id;
 
-    // 3.1 Watchdog for Standard Turn
-    if (!room.botTurnStartAt || room.botTurnActivePlayerId !== botId) {
-      room.botTurnStartAt = Date.now();
-      room.botTurnActivePlayerId = botId;
-      room.botTurnAttempts = 0;
-    }
-    room.botTurnAttempts = (room.botTurnAttempts || 0) + 1;
-
-    if (Date.now() - room.botTurnStartAt > 5000 || room.botTurnAttempts > 5) {
-      console.error(`🚨 [Bot Watchdog] Bot/Autoplay player ${activePlayer.username} turn exceeded timeout limit or maximum attempts! Forcing turn advancement.`);
-
-      const sysMsg = {
-        id: `sys-watchdog-${Date.now()}`,
-        playerId: 'system',
-        username: 'System',
-        text: `⚠️ [Watchdog] Forced turn transition for ${activePlayer.username} to keep the match moving.`,
-        ts: Date.now(),
-        isSystem: true
-      };
-      room.chatHistory.push(sysMsg);
-      io.to(room.code).emit('receive-message', envelope(true, { message: sysMsg }));
-
-      try {
-        const result = skipAfkTurn(room.gameState);
-        if (result.ok) {
-          broadcastEvents(io, room, result.events);
-          broadcastGameState(io, room);
-          startAfkTimer(io, room);
-        }
-      } catch (e) {
-        console.error('[Bot Watchdog Turn Recovery Error]', e);
+      // 3.1 Watchdog for Standard Turn
+      if (!room.botTurnStartAt || room.botTurnActivePlayerId !== botId) {
+        room.botTurnStartAt = Date.now();
+        room.botTurnActivePlayerId = botId;
+        room.botTurnAttempts = 0;
       }
+      room.botTurnAttempts = (room.botTurnAttempts || 0) + 1;
 
-      room.botTurnStartAt = null;
-      room.botTurnActivePlayerId = null;
-      room.botTurnAttempts = 0;
-      room.botExecutingAction = false;
-      triggerBotCycle(io, room);
-      return;
-    }
+      if (Date.now() - room.botTurnStartAt > 5000 || room.botTurnAttempts > 5) {
+        console.error(`🚨 [Bot Watchdog] Bot/Autoplay player ${activePlayer.username} turn exceeded timeout limit or maximum attempts! Forcing turn advancement.`);
 
-    room.botExecutingAction = true;
-    const isDisconnectedHuman = !matchingPlayer.isBot && !matchingPlayer.autoplay && !matchingPlayer.connected;
-    const delayMs = isDisconnectedHuman ? 8000 : 1500;
+        const sysMsg = {
+          id: `sys-watchdog-${Date.now()}`,
+          playerId: 'system',
+          username: 'System',
+          text: `⚠️ [Watchdog] Forced turn transition for ${activePlayer.username} to keep the match moving.`,
+          ts: Date.now(),
+          isSystem: true
+        };
+        room.chatHistory.push(sysMsg);
+        io.to(room.code).emit('receive-message', envelope(true, { message: sysMsg }));
 
-    setTimeout(async () => {
-      try {
-        const curr = room.players.find(p => p.id === botId);
-        if (curr && (curr.isBot || curr.autoplay || !curr.connected)) {
-          await executeBotTurn(io, room, botId);
-        } else {
-          console.log(`[Bot Turn] Player ${botId} reconnected in time. Aborting bot turn.`);
-        }
-      } catch (err) {
-        console.error('[Bot Turn Error]', err);
         try {
           const result = skipAfkTurn(room.gameState);
           if (result.ok) {
@@ -1487,18 +1456,52 @@ const triggerBotCycle = (io, room) => {
             broadcastGameState(io, room);
             startAfkTimer(io, room);
           }
-        } catch (recoveryErr) {
-          console.error('[Bot Turn Recovery Skip Error]', recoveryErr);
+        } catch (e) {
+          console.error('[Bot Watchdog Turn Recovery Error]', e);
         }
-      } finally {
-        room.botExecutingAction = false;
+
         room.botTurnStartAt = null;
         room.botTurnActivePlayerId = null;
         room.botTurnAttempts = 0;
+        room.botExecutingAction = false;
         triggerBotCycle(io, room);
+        return;
       }
-    }, delayMs);
-    return;
+
+      room.botExecutingAction = true;
+      const isDisconnectedHuman = !matchingPlayer.isBot && !matchingPlayer.autoplay && !matchingPlayer.connected;
+      const delayMs = isDisconnectedHuman ? 8000 : 1500;
+
+      setTimeout(async () => {
+        try {
+          const curr = room.players.find(p => p.id === botId);
+          if (curr && (curr.isBot || curr.autoplay || !curr.connected)) {
+            await executeBotTurn(io, room, botId);
+          } else {
+            console.log(`[Bot Turn] Player ${botId} reconnected in time. Aborting bot turn.`);
+          }
+        } catch (err) {
+          console.error('[Bot Turn Error]', err);
+          try {
+            const result = skipAfkTurn(room.gameState);
+            if (result.ok) {
+              broadcastEvents(io, room, result.events);
+              broadcastGameState(io, room);
+              startAfkTimer(io, room);
+            }
+          } catch (recoveryErr) {
+            console.error('[Bot Turn Recovery Skip Error]', recoveryErr);
+          }
+        } finally {
+          room.botExecutingAction = false;
+          room.botTurnStartAt = null;
+          room.botTurnActivePlayerId = null;
+          room.botTurnAttempts = 0;
+          triggerBotCycle(io, room);
+        }
+      }, delayMs);
+      return;
+    }
   }
 };
 
