@@ -264,6 +264,7 @@ const runAudit = async () => {
       status: 'playing',
       turnOrder: [playerIdA, playerIdB],
       currentTurnIdx: 0,
+      currentPlayerId: playerIdA,
       hasRolled: false,
       pendingAction: null,
       players: {
