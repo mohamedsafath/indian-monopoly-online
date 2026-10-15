@@ -1,16 +1,21 @@
-# React + Vite
+# Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The frontend is a JavaScript/JSX single-page application built with React 19, React Router DOM 7, and Vite 8. It uses Socket.IO Client for game events and Tailwind CSS with authored CSS for styling. The complete verified stack, including declared dependency ranges and deployment notes, is documented in the repository [README](../README.md#-technology-stack).
 
-Currently, two official plugins are available:
+## Development
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+From this directory:
 
-## React Compiler
+```bash
+npm install
+npm run dev
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+The Vite development server prints the local URL when it starts. Set `VITE_BACKEND_URL` in the frontend environment to the backend's base URL; it defaults to `http://localhost:5001`.
 
-## Expanding the ESLint configuration
+## Available scripts
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+* `npm run dev` starts Vite's development server.
+* `npm run build` creates the production bundle in `dist/`.
+* `npm run preview` serves the production bundle locally.
+* `npm run lint` runs ESLint on the frontend source.

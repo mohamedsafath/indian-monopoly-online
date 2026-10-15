@@ -1836,9 +1836,6 @@ const initiateTrade = (gameState, fromPlayerId, toPlayerId, offer, request) => {
   if (!toPlayer   || toPlayer.isBankrupt)   return fail('Target player is not active');
   if (fromPlayerId === toPlayerId)           return fail('Cannot trade with yourself');
   if (gameState.activeTrade)                return fail('A trade is already in progress');
-  if (fromPlayer.money < 0 || toPlayer.money < 0) {
-    return fail('Players in debt cannot participate in trades');
-  }
 
   if (!offer || !request) {
     return fail('Invalid trade payload');
@@ -1858,7 +1855,8 @@ const initiateTrade = (gameState, fromPlayerId, toPlayerId, offer, request) => {
   const requestPropertyIds = (request.propertyIds ?? []).map(Number);
 
   // Validate offer money
-  if (offerMoney > fromPlayer.money) {
+  const maxOfferMoney = Math.max(0, fromPlayer.money);
+  if (offerMoney > maxOfferMoney) {
     return fail('You cannot offer more money than you have');
   }
   // Validate offer properties
@@ -1868,7 +1866,8 @@ const initiateTrade = (gameState, fromPlayerId, toPlayerId, offer, request) => {
     }
   }
   // Validate request money
-  if (requestMoney > toPlayer.money) {
+  const maxRequestMoney = Math.max(0, toPlayer.money);
+  if (requestMoney > maxRequestMoney) {
     return fail('Target player does not have that much money');
   }
   // Validate request properties
@@ -1930,11 +1929,11 @@ const acceptTrade = (gameState, playerId) => {
 
   // Final validation before execution (balances may have changed)
   let cancelReason = null;
-  if (fromPlayer.money < 0 || toPlayer.money < 0) {
-    cancelReason = 'Players in debt cannot participate in trades';
-  } else if (fromPlayer.money < trade.offer.money) {
+  const maxFromPlayerMoney = Math.max(0, fromPlayer.money);
+  const maxToPlayerMoney = Math.max(0, toPlayer.money);
+  if (maxFromPlayerMoney < trade.offer.money) {
     cancelReason = `${fromPlayer.username} no longer has sufficient funds`;
-  } else if (toPlayer.money < trade.request.money) {
+  } else if (maxToPlayerMoney < trade.request.money) {
     cancelReason = `${toPlayer.username} no longer has sufficient funds`;
   } else {
     for (const tileId of trade.offer.propertyIds) {
@@ -2088,7 +2087,8 @@ const counterTrade = (gameState, playerId, offer, request) => {
   const requestPropertyIds = (request.propertyIds ?? []).map(Number);
 
   // Validate new offer money (offered by the countering player)
-  if (offerMoney > toPlayer.money) {
+  const maxOfferMoney = Math.max(0, toPlayer.money);
+  if (offerMoney > maxOfferMoney) {
     return fail('You cannot offer more money than you have');
   }
   // Validate new offer properties (owned by the countering player)
@@ -2098,7 +2098,8 @@ const counterTrade = (gameState, playerId, offer, request) => {
     }
   }
   // Validate new request money (requested from the original proposer)
-  if (requestMoney > fromPlayer.money) {
+  const maxRequestMoney = Math.max(0, fromPlayer.money);
+  if (requestMoney > maxRequestMoney) {
     return fail('Target player does not have that much money');
   }
   // Validate new request properties (owned by the original proposer)

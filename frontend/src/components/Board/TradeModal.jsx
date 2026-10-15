@@ -380,7 +380,7 @@ export function TradeModal({
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     <span style={{ fontSize: 11, color: '#d4af37' }}>₹</span>
                     <input
-                      type="number" min="0" max={me?.money ?? 0}
+                      type="number" min="0" max={Math.max(0, me?.money ?? 0)}
                       value={offerCash}
                       onChange={e => {
                         const valStr = e.target.value;
@@ -389,7 +389,8 @@ export function TradeModal({
                         } else {
                           const num = Number(valStr);
                           if (!isNaN(num)) {
-                            setOfferCash(Math.max(0, Math.min(me?.money ?? 0, Math.floor(num))));
+                            const maxLimit = Math.max(0, me?.money ?? 0);
+                            setOfferCash(Math.max(0, Math.min(maxLimit, Math.floor(num))));
                           }
                         }
                       }}

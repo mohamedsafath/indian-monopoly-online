@@ -8,9 +8,46 @@ The game is built with a responsive frontend optimized for both desktop and mobi
 
 ## 🚀 Technology Stack
 
-* **Frontend**: React 19, React Router v7, TailwindCSS, Vite
-* **Backend**: Node.js, Express, Socket.IO (WebSockets), Mongoose (MongoDB)
-* **Persistent Recovery**: In-memory caching with MongoDB updates and JSON fallback files for robust match state recovery.
+This section is based on the checked-in package manifests, lockfiles, source imports, and deployment configuration. Version ranges below are those declared in `package.json`; the lockfiles record the resolved dependency versions. The frontend and backend are separate npm projects with their own `package.json` and `package-lock.json`.
+
+### Languages and runtimes
+
+* **JavaScript** is used throughout. The frontend uses JSX and ES modules; the backend uses CommonJS modules. There is no TypeScript source or TypeScript build configuration in this repository.
+* **Node.js** runs the backend and frontend build tooling. The Dockerfiles use the `node:20-alpine` image; the package manifests do not declare a separate Node.js engine range.
+* **HTML and CSS** provide the browser document and styling. Tailwind utility classes are used alongside authored CSS.
+
+### Frontend
+
+* **React** (`^19.2.6`) and **React DOM** (`^19.2.6`) render the application.
+* **React Router DOM** (`^7.15.1`) handles client-side routes.
+* **Socket.IO Client** (`^4.8.3`) connects the browser to the game server. The configured client transport is HTTP polling (`transports: ['polling']`); it does not upgrade to WebSocket.
+* **Vite** (`^8.0.12`) serves the development app and produces the production bundle; **`@vitejs/plugin-react`** (`^6.0.1`) integrates React.
+* **Tailwind CSS** (`^3.4.19`), **PostCSS** (`^8.5.15`), and **Autoprefixer** (`^10.5.0`) process styles. The project also has handwritten CSS in `src/index.css` and `src/App.css`.
+* **ESLint** (`^10.3.0`) checks JavaScript/JSX, with `@eslint/js` (`^10.0.1`), `globals` (`^17.6.0`), `eslint-plugin-react-hooks` (`^7.1.1`), and `eslint-plugin-react-refresh` (`^0.5.2`). The `@types/react` (`^19.2.14`) and `@types/react-dom` (`^19.2.3`) packages are installed, but the application itself is JavaScript/JSX, not TypeScript.
+
+### Backend
+
+* **Node.js** runs the server in `backend/server.js`.
+* **Express** (`^5.2.1`) provides HTTP routes and middleware; **CORS** (`^2.8.6`) configures cross-origin requests; **express-rate-limit** (`^8.5.2`) applies rate limits.
+* **Socket.IO** (`^4.8.3`) provides the real-time game event server. The backend also declares **Socket.IO Client** (`^4.8.3`) as a development dependency for its test/integration scripts.
+* **Mongoose** (`^9.6.2`) is the MongoDB ODM. MongoDB is optional at startup: when its connection is unavailable, room, user, and feedback data use in-memory registries with JSON-file fallback; completed-match history falls back to process memory only. These fallbacks are not equivalent to a durable MongoDB store.
+* **Nodemailer** (`^8.0.10`) sends verification email through SMTP when SMTP environment settings are provided. The email service logs a simulated/fallback code when SMTP is not configured or delivery fails.
+* **dotenv** (`^17.4.2`) loads backend environment variables. The server also uses Node.js built-in modules including `http`, `crypto`, `fs`, and `path`.
+
+### Browser integrations and quality tooling
+
+* The frontend loads **Google Identity Services** from Google's hosted `accounts.google.com/gsi/client` script. The backend verifies Google ID tokens through Google's `oauth2.googleapis.com/tokeninfo` endpoint.
+* User avatar URLs are generated with the hosted **DiceBear** API (`api.dicebear.com`).
+* **Playwright** (`^1.60.0`) is a backend dependency used by the browser QA script. The repository also contains standalone Node.js test/integration scripts; there is no `test` script declared in either package manifest.
+* **Nodemon** (`^3.1.14`) is a backend development dependency used by the `npm run dev` script.
+
+### Build and deployment configuration
+
+* Run npm commands separately from `backend/` and `frontend/`; each has its own lockfile.
+* The backend Dockerfile builds from **Node 20 Alpine**, runs `node server.js`, and exposes port `5001`.
+* The frontend Dockerfile builds the Vite app with **Node 20 Alpine**, then serves the generated static files using **Nginx Alpine** on port `80`. `frontend/nginx.conf` falls back to `index.html` for client-side routes.
+* Root and frontend `vercel.json` files contain SPA rewrite configuration. These files document deployment configuration only; they do not establish that a particular hosting service is currently deployed.
+* The backend's default development/start commands are `npm run dev` (Nodemon) and `npm start` (Node). The frontend provides `npm run dev`, `npm run build`, `npm run preview`, and `npm run lint`.
 
 ---
 
@@ -50,7 +87,7 @@ Over the course of development, we identified and solved several challenging edg
 ## 🛠️ Local Development Setup
 
 ### 1. Prerequisites
-Make sure you have [Node.js](https://nodejs.org/) installed and a running [MongoDB](https://www.mongodb.com/) instance (optional, the server automatically falls back to in-memory mode with local fallback files if MongoDB is not found).
+Install Node.js (the Docker images use Node 20). MongoDB is optional: without a reachable MongoDB instance the backend falls back to in-memory storage and, for rooms, users, and feedback, local JSON files. Completed-match history in fallback mode is process-memory-only.
 
 ### 2. Clone and Setup Environment
 Define your environment variables. In `frontend/.env` (or setup backend environment):
